@@ -1,0 +1,7 @@
+Motif_Name	Motif_Sequence	Threshold	Min	Max
+Proline-enriched_region	PPGPXXXP	26	20	120
+C-terminal_helix	WXXXR	11	110	210
+I-helix	(A/G)GX(E/D)T(T/S)	20	280	350
+EXXR	EXXR	5	320	440
+PERF	FXPERF	24	380	500
+Heme-binding_region	FXXGXRXCXG	26	400	550
