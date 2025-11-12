@@ -84,8 +84,8 @@ python3 CYP_Annotator.py --file_collection <PATH_TO_FILE_COLLECTION_CSV>
 
 |Command|Description|Default
 |--|--|--
-|`--mode_aln <STR>` |Tool used for multiple alignments (`mafft|muscle`)|`mafft`
-|`--mode_tree <STR>` |Tool used for tree construction (fasttree|raxml|iqtree)|`fasttree`
+|`--mode_aln <STR>` |Tool used for multiple alignments (`mafft/muscle`)|`mafft`
+|`--mode_tree <STR>` |Tool used for tree construction (fasttree/raxml/iqtree)|`fasttree`
 |`--mafft <STR>` |MAFFT command|`mafft`
 |`--muscle <STR>` |MUSCLE command|`muscle`
 |`--fasttree <STR>` |Fasttree command|`fasttree`
