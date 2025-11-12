@@ -1,11 +1,10 @@
 # region Information
-# Skripte aus bHLH-Annotator, MYB-Annotator und Tree-Annotator werden genutzt (Referenzen ergänzen)
 """
 Region containing general information about the script.
 """
 
-""""
-Functions used in this script are in part taken from bHLH annotator and MYB annotator
+"""
+Most functions were copied or adapted from MYB_annotator http://dx.doi.org/10.1186/s12864-022-08452-5 and bHLH_annotator https://doi.org/10.1186/s12864-023-09877-2
 """
 
 __version__ = "v0.1"
@@ -24,23 +23,23 @@ __usage__ = """
                     --expression <EXPRESSION_MATRIX_CSV>
                     --metadata <METADATA_CSV_FOR_EXPRESSION>
 
-                    --output_folder <OUTPUT_FOLDER>
+                    --output_folder <OUTPUT_FOLDER>[CYP_Annotator_Output]
                     --processed_input_folder <PROCESSED_INPUT_FOLDER>
-                    --name <STRING_USED_AS_PREFIX_IN_FILENAMES>
-                    --trim_names <TRIM_SEQUENCE_NAMES>(y/n)[n]
+                    --name <STRING_USED_AS_PREFIX_IN_FILENAMES>[""]
+                    --trim_names <TRIM_SEQUENCE_NAMES>(y/n)[y]
 
+                    --use_hmmer <USE_HMMER_FOR_INITIAL_SEARCH>(y/n)[n]
                     --cpu_max <MAX_NUMBER_OF_CPUS>[4]
                     --parallel <PARALLEL_CLASSIFICATION_MODE>(y/n)[y]
                     --num_process_candidates <CANDIDATES_PER_PARALLEL_RUN>[200]
 
-                    --use_hmmer <USE_HMMER_FOR_INITIAL_SEARCH>(y/n)[n]
-
                     --mode_aln <ALIGNMENT_TOOL>(mafft|muscle)[mafft]
-                    --mode_tree <TREE_TOOL>(fasttree|raxml)[fasttree]
+                    --mode_tree <TREE_TOOL>(fasttree|raxml|iqtree)[fasttree]
                     --mafft <PATH_TO_MAFFT>[mafft]
                     --muscle <PATH_TO_MUSCLE>[muscle]
                     --fasttree <PATH_TO_FASTTREE>[fasttree]
                     --raxml <PATH_TO_RAXML>[raxml-ng]
+                    --iqtree <PATH_TO_IQTREE>[iqtree]
 
                     --blastp <PATH_TO_BLASTP>[blastp]
                     --makeblastdb <PATH_TO_MAKEBLASTDB>[makeblastdb]
@@ -48,37 +47,36 @@ __usage__ = """
 
                     --simcutp <BLASTP_SIMILARITY_CUTOFF>[40.0]
                     --poscutp <MAX_HITS_PER_BAIT>[100]
-                    --lencutp <MIN_HIT_LENGTH>[80]
-                    --bitcutp <MIN_BLASTP_BITSCORE>[60]
+                    --lencutp <MIN_HIT_LENGTH>[200]
+                    --bitcutp <MIN_BLASTP_BITSCORE>[80]
 
                     --filterdomain <DOMAIN_FILTER_FOR_CLASSIFICATION>(y/n)[y]
                     --minscore <MIN_SCORE_FOR_INGROUP>[0.5]
-                    --numneighbours <NUMBER_OF_NEIGHBOURS>[20]
+                    --numneighbours <NUMBER_OF_NEIGHBOURS>[24]
                     --neighbourdist <NEIGHBOUR_DISTANCE>[5.0]
                     --minneighbours <MIN_NEIGHBOURS>[0]
-
+             
                     --static_pd <USE STATIC PATRISTIC DISTANCE THRESHOLDS>(y/n)[n]
-                    --threshold_factor <FACTOR FOR DYNAMIC THRESHOLD CALCULATION>[0.2]
-                    --subfamily_threshold <ORTHOLOG_DISTANCE_THRESHOLD>[0.5]
-                    --family_threshold <NEIGHBOUR_DISTANCE_THRESHOLD>[2.0]
-                    --individual_tree <GENERATE_TREE_FOR_EACH_BAIT>(y/n)[y]
-
+                    --threshold_factor <FACTOR FOR DYNAMIC THRESHOLD CALCULATION>[0.5]
+                    --subfamily_threshold <ORTHOLOG_DISTANCE_THRESHOLD>[1.1]
+                    --family_threshold <NEIGHBOUR_DISTANCE_THRESHOLD>[2.7]
+                    
+                    --individual_tree <GENERATE_TREE_FOR_EACH_BAIT>(y/n)[n]
                     --bait_column <COLUMN_FOR_BAIT_FILTERING>[Evidence]
                     --bait_keyword <KEYWORD_FOR_BAIT_FILTERING>[Literature]
-                    --ortholog_prefix <PREFIX_FOR_ORTHOLOG_OUTPUT>[selected]
+
+                    --ortholog_prefix <PREFIX_FOR_ORTHOLOG_OUTPUT>[All]
                     --individual_ortholog_prefix <PREFIX_FOR_INDIVIDUAL_ORTHOLOGS>[None]
+
+                    --domain_Score <HMM_DOMAIN_SCORE>[100]
+                    --motif_cEvalue <MOTIF_C-EVALUE>[0.01]
+
+                    --min_avg_tpm <MIN_AVG_TPM_FOR_EXPRESSED_GENES>[1.0]
+                    --min_single_tpm <MIN_SINGLE_TPM_FOR_EXPRESSED_GENES>[5.0]
 
                     --collapse <REDUCE_PARALOGS_TO_REPRESENTATIVES>(y/n)[y]
                     --paralogdist <DISTANCE_THRESHOLD_FOR_PARALOGS>[10.0]
                     --min_paralog_tpm <MIN_TPM_FOR_PARALOGS>[1.0]
-
-                    --domain_Score <HMM_DOMAIN_C-EVALUE>[100]
-                    --motif_cEvalue <MOTIF_C-EVALUE>[0.01]
-
-                    --min_avg_tpm <MAX_AVG_TPM_FOR_PSEUDOGENES>[1.0]
-                    --min_single_tpm <MAX_SINGLE_TPM_FOR_PSEUDOGENES>[5.0]
-
-                    bug reports and feature requests: kgeo@uni-bonn.de
                     """
 
 #endregion
@@ -449,8 +447,8 @@ parser.add_argument(
 parser.add_argument(
     "--threshold_factor",
     type=float,
-    default=0.5,
-    help="Factor for adding deviation/IQR to mean/median in dynamic threshold calculation (default: 0.2)"
+    default=1.0,
+    help="Factor for adding deviation/IQR to mean/median in dynamic threshold calculation (default: 1.0)"
 )
 parser.add_argument(
     "--subfamily_threshold",
@@ -497,7 +495,7 @@ parser.add_argument(
     "--domain_Score",
     type=float,
     default=100,
-    help="c-Evalue for hmm motif integration (default: 100)"
+    help="Score-Value for domain integration (default: 100)"
 )
 
 # Motif Check
@@ -1163,7 +1161,7 @@ def run_blast_search(query_file, subject_file, output_file, blast_db_folder, cpu
             "-out", blast_db,
             "-dbtype", "prot"
         ],
-        # stdout=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
         # stderr=subprocess.DEVNULL
     )
     p.communicate()
@@ -1179,7 +1177,7 @@ def run_blast_search(query_file, subject_file, output_file, blast_db_folder, cpu
             "-evalue", "0.001",
             "-num_threads", str(cpu_max)
         ],
-        # stdout=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
         # stderr=subprocess.DEVNULL
     )
     p.communicate()
@@ -1412,7 +1410,7 @@ def load_alignment(aln_file: str, tmp_mapping: Dict[str, str]) -> Dict[str, str]
         sequences.update({header: "".join(seq)})
     return sequences
 
-def parallel_tree_constructor(num_process_candidates: int, tree_output_folder: str, 
+def tree_constructor(num_process_candidates: int, tree_output_folder: str, 
                             aln_candidate_file: str, aln_input_file: str, 
                             aln_file: str, cln_aln_file: str, bait_file: str, 
                             candidate_file: str, name: str, number: int, 
@@ -1620,7 +1618,7 @@ def parallel_tree_constructor(num_process_candidates: int, tree_output_folder: s
         return existing_trees
         
     except Exception as e:
-        print(f"Error in parallel_tree_constructor: {str(e)}")
+        print(f"Error in tree_constructor: {str(e)}")
         import traceback
         traceback.print_exc()
         raise
@@ -1985,8 +1983,7 @@ def perform_candidate_tree_analysis(
     tree_folder: str,
     group_around_ref_file: str,
     ref_mapping_file: str,
-    filtered_fasta_file: str,
-    linneage_specific_fasta: str
+    filtered_fasta_file: str
 ) -> None:
     """
     Performs phylogenetic analysis and candidate assignment based on 
@@ -2011,7 +2008,7 @@ def perform_candidate_tree_analysis(
 
     # If the first tree does not exist, construct it
     if not (os.path.isdir(tree_folder) and any(f.startswith(first_prefix + "_first") for f in os.listdir(tree_folder))):
-        tree_file = parallel_tree_constructor(
+        tree_file = tree_constructor(
             len(clean_members), output_tree_folder, aln_candidate_file, aln_input_file,
             aln_file, cln_aln_file, bait_fasta_path, clean_members_file, f"{first_prefix}_first_", "",
             args.mode_aln, args.mode_tree, args.mafft, args.muscle, args.raxml, args.fasttree, args.iqtree,
@@ -2133,7 +2130,6 @@ def perform_candidate_tree_analysis(
                     all_candidates.add(cid)
                     candidate_to_family.setdefault(cid, []).append({**cand, 'ref_id': ref})
 
-            ref_name = ""
             for new_gene in sorted(all_candidates):
                 subfamily_assign = sorted(candidate_to_subfamily.get(new_gene, []), key=lambda x: x['patr'])
                 family_assign = sorted(candidate_to_family.get(new_gene, []), key=lambda x: x['patr'])
@@ -2159,9 +2155,10 @@ def perform_candidate_tree_analysis(
                     fam_patr = str(fam_ortho.get('patr', ''))
                     fam_thr = str(fam_ortho.get('fam_thr', ''))
 
+                    # ÄNDERUNG: Candidate_Member und Original_ID werden in JEDER Zeile eingetragen
                     out.write("\t".join([
-                        new_gene if (new_gene != ref_name and i == 0) else " " * len(new_gene),
-                        subject_name_mapping_table.get(new_gene, '') if i == 0 else "",
+                        new_gene,  # Immer die Clean_ID eintragen
+                        subject_name_mapping_table.get(new_gene, ''),  # Immer die Original_ID eintragen
                         sub_id, sub_grp, sub_fam, sub_subfam, sub_edges, sub_patr, sub_thr,
                         fam_id, fam_grp, fam_fam, fam_subfam, fam_edges, fam_patr, fam_thr
                     ]) + "\n")
@@ -2176,21 +2173,11 @@ def perform_candidate_tree_analysis(
                 final_candidates.add(entry['candidate_id'])
 
     
-    #filtered_seqs = {seq_id: clean_members[seq_id] for seq_id in final_candidates if seq_id in clean_members}
-    filtered_seqs = {seq_id: sequence for seq_id, sequence in clean_members.items() 
-                 if seq_id in final_candidates}
-    
+    filtered_seqs = {seq_id: clean_members[seq_id] for seq_id in final_candidates if seq_id in clean_members}
     write_fasta(filtered_seqs, filtered_fasta_file)
 
-    # Reversed filter (keeping seq_ids NOT IN final_candidates)
-    linneage_specific_seqs = {seq_id: sequence for seq_id, sequence in clean_members.items() 
-            if seq_id not in final_candidates}
-    
-    if linneage_specific_fasta != "":
-        write_fasta(linneage_specific_seqs, linneage_specific_fasta)
-
     # Prepare file paths for final tree
-    final_tree_output_folder = os.path.join(supplement_folder, f"{aln_prefix}final_tree/")
+    final_tree_output_folder = os.path.join(supplement_folder, f"{aln_prefix}final_0_FastTree_tree/")
     final_aln_candidate_file = f"{aln_prefix}final_alignment_candidates.fasta"
     final_aln_input_file = f"{aln_prefix}final_alignment_input.fasta"
     final_aln_file = f"{final_aln_input_file}.aln"
@@ -2198,7 +2185,7 @@ def perform_candidate_tree_analysis(
 
     # Construct final tree if not already done
     if not (os.path.isdir(tree_folder) and any(f.startswith(second_prefix + "_final") for f in os.listdir(tree_folder))):
-        tree_file = parallel_tree_constructor(
+        tree_file = tree_constructor(
             len(clean_members), final_tree_output_folder, final_aln_candidate_file, final_aln_input_file,
             final_aln_file, final_cln_aln_file, bait_fasta_path, filtered_fasta_file, f"{second_prefix}_final_", "",
             args.mode_aln, args.mode_tree, args.mafft, args.muscle, args.raxml, args.fasttree, args.iqtree,
@@ -3282,32 +3269,59 @@ def collect_summary_data(
         highest_expression_file=None,
         paralog_group_file=None
         ):
-    """"
-    Collects data for the summary table.
-    Returns a dictionary with summary data.
+    """
+    Collects data for the summary table from multiple input files.
+    Returns a dictionary mapping Clean_IDs to lists of summary data
     """
     
     summary_data = {}
+    clean_to_original_id_map = {} 
+    valid_clean_ids = set()
 
-    # Step 1: Read ref_mapping_file → Column 2 (seq_id) and 3 (gene_id)
+    # Step 1: Parse reference mapping file
+    # Column indices (0-based):
+    # parts[0] = Candidate_Member (Clean_ID) - used as dictionary key
+    # parts[1] = Original_ID
+    # parts[2] = Subfamily_Level_Ortholog (primary reference gene)
+    # parts[9] = Family_Level_Ortholog (fallback reference gene)
     with open(ref_mapping_file, 'r') as f:
+        next(f, None)  # Skip header
+        
         for line in f:
             parts = line.strip().split('\t')
-            if len(parts) < 6:
+            if len(parts) < 10:
                 continue
-            seq_id = parts[1]
-            gene_id = parts[2]
-            summary_data[seq_id] = [seq_id, gene_id]
+            
+            clean_id = parts[0].strip()
+            original_id = parts[1].strip()
+            
+            # Process only lines with both IDs present
+            if clean_id and original_id:
+                
+                # Ensure each Clean_ID appears only once
+                if clean_id in summary_data:
+                    continue
+                
+                # Use subfamily ortholog, fallback to family ortholog if unavailable
+                gene_id = parts[2].strip() 
+                if gene_id == "-":
+                    gene_id = parts[9].strip()
+                
+                # Only include assigned candidates
+                if gene_id != "-":
+                    summary_data[clean_id] = [clean_id, gene_id]
+                    clean_to_original_id_map[clean_id] = original_id
+                    valid_clean_ids.add(clean_id)
 
-    # Add Family/Subfamily info from baits_info
-    for seq_id in summary_data:
+    # Step 2: Add family and subfamily information
+    for seq_id in list(summary_data.keys()):
         gene_id = summary_data[seq_id][1]  
         baits_info_row = baits_info.get(gene_id, {})
         col4 = baits_info_row.get("Family", "-")
         col5 = baits_info_row.get("Subfamily", "-")
         summary_data[seq_id].extend([col4, col5])
 
-    # Step 2: Add best domain matches → Column 2 by ID in Column 1
+    # Step 3: Add best domain matches (keyed by Original_ID)
     best_domain_dict = {}
     if best_domain_match_file:
         with open(best_domain_match_file, 'r') as f:
@@ -3316,10 +3330,12 @@ def collect_summary_data(
                 parts = line.strip().split('\t')
                 if len(parts) >= 2:
                     best_domain_dict[parts[0]] = parts[1]
-    for seq_id in summary_data:
-        summary_data[seq_id].append(best_domain_dict.get(seq_id, "-"))
+    
+    for seq_id in list(summary_data.keys()):
+        original_id = clean_to_original_id_map.get(seq_id)
+        summary_data[seq_id].append(best_domain_dict.get(original_id, "-"))
 
-    # Step 3: Add motif presence → Columns 2–7 by ID in Column 1
+    # Step 4: Add motif presence data (keyed by Original_ID)
     motif_dict = {}
     if motif_check_file_summary:
         with open(motif_check_file_summary, 'r') as f:
@@ -3328,10 +3344,12 @@ def collect_summary_data(
                 parts = line.strip().split('\t')
                 if len(parts) >= 7:
                     motif_dict[parts[0]] = parts[1:7]
-    for seq_id in summary_data:
-        summary_data[seq_id].extend(motif_dict.get(seq_id, ["-"] * 6))
+    
+    for seq_id in list(summary_data.keys()):
+        original_id = clean_to_original_id_map.get(seq_id)
+        summary_data[seq_id].extend(motif_dict.get(original_id, ["-"] * 6))
 
-    # Step 4: Add highest expression info → Columns 2–5 by ID in Column 1
+    # Step 5: Add highest expression information (keyed by Clean_ID)
     expression_dict = {}
     if highest_expression_file:
         with open(highest_expression_file, 'r') as f:
@@ -3340,10 +3358,11 @@ def collect_summary_data(
                 parts = line.strip().split('\t')
                 if len(parts) >= 5:
                     expression_dict[parts[0]] = parts[1:5]
-    for seq_id in summary_data:
+    
+    for seq_id in list(summary_data.keys()):
         summary_data[seq_id].extend(expression_dict.get(seq_id, ["-"] * 4))
 
-    # Step 5: Determine representative paralogs → ID before ":" = representative
+    # Step 6: Determine representative paralogs (keyed by Clean_ID)
     repr_ids = set()
     if paralog_group_file:
         with open(paralog_group_file, 'r') as f:
@@ -3353,8 +3372,14 @@ def collect_summary_data(
                     parts = line.strip().split("\t")
                     repr_id = parts[0].strip()
                     repr_ids.add(repr_id)
-    for seq_id in summary_data:
+    
+    for seq_id in list(summary_data.keys()):
         summary_data[seq_id].append("YES" if seq_id in repr_ids else "NO")
+
+    # Final validation: Remove any entries not in original valid Clean_IDs
+    keys_to_remove = [key for key in summary_data.keys() if key not in valid_clean_ids]
+    for key in keys_to_remove:
+        del summary_data[key]
 
     return summary_data
 
@@ -3938,7 +3963,7 @@ def main():
 
             # --- BLAST-Path ---
             else:
-                print("Running BLAST search for CYP candidates")
+                #print("Running BLAST search for CYP candidates")
                 blast_result_file = os.path.join(supplement_folder, "blast_results.txt")
                 if not os.path.isfile(blast_result_file):
                     run_blast_search(
@@ -4022,7 +4047,7 @@ def main():
             sys.stdout.flush()
 
             # construct phylogenetic trees
-            tree_files = parallel_tree_constructor(
+            tree_files = tree_constructor(
                 args.num_process_candidates, inout_output_folder, aln_candidate_file, aln_input_file,
                 aln_file, cln_aln_file, baits_with_outgroup_path, candidate_file, "first_", "",
                 args.mode_aln, args.mode_tree, args.mafft, args.muscle, args.raxml, args.fasttree, args.iqtree,
@@ -4097,7 +4122,7 @@ def main():
             sys.stdout.flush()
 
             # construct phylogenetic trees
-            tree_files = parallel_tree_constructor(
+            tree_files = tree_constructor(
                 args.num_process_candidates, inout_output_folder, aln_candidate_file, aln_input_file,
                 aln_file, cln_aln_file, baits_with_outgroup_path, candidate_file, "second_", "",
                 args.mode_aln, args.mode_tree, args.mafft, args.muscle, args.raxml, args.fasttree, args.iqtree,
@@ -4165,14 +4190,13 @@ def main():
         print(f"Step 2 completed. {len(filtered_members)} ingroup candidates selected.")
 
         # --- 03 construct a filtered tree and find closest reference for baits --- #
-        print("Steps 3 and 4: Construct phylogenetic trees and assign orthologs to candidates.")
+        print("Step 3: Construct phylogenetic trees and assign orthologs to candidates.")
         prefix=args.ortholog_prefix
         first_prefix=f"03_{args.ortholog_prefix}"
-        second_prefix=f"04_{args.ortholog_prefix}"
-        filtered_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_candidates_group_around_bait.txt")
-        filtered_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidate_2_bait_mapping_file.txt")
+        second_prefix=f"03_{args.ortholog_prefix}"
+        filtered_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_baits_to_candidates_mapping.txt")
+        filtered_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidates_to_bait_mapping.txt")
         final_members_file = Path(fasta_folder) / f"{second_prefix}_candidate.fasta"
-        linneage_specific_file = Path(fasta_folder) / f"{second_prefix}_linneage_specific_sequences.fasta"
 
         ortholog_files_exist = all ([
             os.path.isfile(filtered_group_around_ref_file) and os.path.getsize(filtered_group_around_ref_file) > 0,
@@ -4198,8 +4222,7 @@ def main():
                 tree_folder=tree_folder,
                 group_around_ref_file=filtered_group_around_ref_file,
                 ref_mapping_file=filtered_ref_mapping_file,
-                filtered_fasta_file=final_members_file,
-                linneage_specific_fasta = linneage_specific_file
+                filtered_fasta_file=final_members_file
             )
         else:
             filtered_tree_path = os.path.join(tree_folder, f"{args.name}{first_prefix}_first_0_FastTree_tree.tre")
@@ -4213,10 +4236,10 @@ def main():
             if args.individual_ortholog_prefix is None:
                 args.individual_ortholog_prefix = args.bait_keyword.split()[0]
             prefix=args.individual_ortholog_prefix
-            first_prefix=f"03.1_{args.individual_ortholog_prefix}"
-            second_prefix=f"04.1_{args.individual_ortholog_prefix}"
-            ind_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_candidates_group_around_bait.txt")
-            ind_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidate_2_bait_mapping_file.txt")
+            first_prefix=f"03_{args.individual_ortholog_prefix}"
+            second_prefix=f"03_{args.individual_ortholog_prefix}"
+            ind_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_baits_to_candidates_mapping.txt")
+            ind_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidates_to_bait_mapping.txt")
             ind_filtered_fasta_file = Path(fasta_folder) / f"{second_prefix}_candidate.fasta"
 
             individual_ortholog_files_exist = all ([
@@ -4228,7 +4251,7 @@ def main():
             if not (os.path.isdir(tree_folder) and any(f.startswith("04") for f in os.listdir(tree_folder))) \
             or not individual_ortholog_files_exist:
                 filtered_bait_ids = filter_baits_by_info(baits_info, args.bait_column, args.bait_keyword)
-                reduced_bait_fasta = os.path.join(fasta_folder, f"{args.name}04_filtered_baits.fasta")
+                reduced_bait_fasta = os.path.join(fasta_folder, f"{args.name}03_filtered_baits.fasta")
                 bait_sequences = read_fasta(baits_path)
                 selected_seqs = {k: v for k, v in bait_sequences.items() if k in filtered_bait_ids}
                 write_fasta(selected_seqs, Path(reduced_bait_fasta))
@@ -4248,8 +4271,7 @@ def main():
                     tree_folder=tree_folder,
                     group_around_ref_file=ind_group_around_ref_file,
                     ref_mapping_file=ind_ref_mapping_file,
-                    filtered_fasta_file=ind_filtered_fasta_file,
-                    linneage_specific_fasta = ""
+                    filtered_fasta_file=ind_filtered_fasta_file
                 )
             else:
                 ind_filtered_tree_path = os.path.join(tree_folder, f"{args.name}{first_prefix}_first_0_FastTree_tree.tre")
@@ -4257,20 +4279,18 @@ def main():
 
             tree_counter += 2
 
-        print("Steps 3 and 4 completed.")
+        print("Step 3 completed.")
 
-        # --- 05 check for protein domains --- #
-        print("Step 5: Check for protein domains.")
-        domain_check_file_summary = os.path.join(txt_folder, f"{args.name}05_domain_check.txt")
-        best_domain_match_file = os.path.join(txt_folder, f"{args.name}05_best_domain_match.txt")
-        domain_check_hmm_result = os.path.join(supplement_folder, "05_domain_hmmsearch.txt")
-        domain_check_hmm_output = os.path.join(supplement_folder, "05_domain_hmmsearch_output.txt")
+        # --- 04 check for protein domains --- #
+        print("Step 4: Check for protein domains.")
+        domain_check_file_summary = os.path.join(txt_folder, f"{args.name}04_domain_check.txt")
+        best_domain_match_file = os.path.join(txt_folder, f"{args.name}04_best_domain_match.txt")
+        domain_check_hmm_result = os.path.join(supplement_folder, "04_domain_hmmsearch.txt")
+        domain_check_hmm_output = os.path.join(supplement_folder, "04_domain_hmmsearch_output.txt")
 
         domain_files_exist_and_not_empty = all([
             os.path.isfile(domain_check_file_summary) and os.path.getsize(domain_check_file_summary) > 0,
-            os.path.isfile(best_domain_match_file) and os.path.getsize(best_domain_match_file) > 0,
-            os.path.isfile(domain_check_hmm_result) and os.path.getsize(domain_check_hmm_result) > 0,
-            os.path.isfile(domain_check_hmm_output) and os.path.getsize(domain_check_hmm_output) > 0,
+            os.path.isfile(best_domain_match_file) and os.path.getsize(best_domain_match_file) > 0
         ])
 
         if not domain_files_exist_and_not_empty:
@@ -4302,17 +4322,17 @@ def main():
                         ortholog_family = ref_family.get(candidate_name, "None")
                         out2.write(f"{candidate_name}\t{best_dom}\t{ortholog_family}\n")
                         
-        print("Step 5 completed.")
+        print("Step 4 completed.")
 
-        # --- 06 check for common protein motifs --- #
-        print("Step 6: Check for common protein motifs.")
-        static_summary_file = os.path.join(txt_folder, f"{args.name}06_static_motif_check_summary.txt")
-        static_results_file = os.path.join(txt_folder, f"{args.name}06_static_motif_check_results.txt")
-        hmm_summary_file = os.path.join(txt_folder, f"{args.name}06_hmm_motif_check_summary.txt")
-        hmm_results_file = os.path.join(txt_folder, f"{args.name}06_hmm_motif_check_results.txt")
+        # --- 05 check for common protein motifs --- #
+        print("Step 5: Check for common protein motifs.")
+        static_summary_file = os.path.join(txt_folder, f"{args.name}05_static_motif_check_summary.txt")
+        static_results_file = os.path.join(txt_folder, f"{args.name}05_static_motif_check_results.txt")
+        hmm_summary_file = os.path.join(txt_folder, f"{args.name}05_hmm_motif_check_summary.txt")
+        hmm_results_file = os.path.join(txt_folder, f"{args.name}05_hmm_motif_check_results.txt")
 
-        motif_check_hmm_result = os.path.join(supplement_folder, "06_motif_hmmsearch.txt")
-        motif_check_hmm_output = os.path.join(supplement_folder, "06_motif_hmmsearch_output.txt")
+        motif_check_hmm_result = os.path.join(supplement_folder, "05_motif_hmmsearch.txt")
+        motif_check_hmm_output = os.path.join(supplement_folder, "05_motif_hmmsearch_output.txt")
 
         static_motif_files_exist_and_not_empty = all([
             os.path.isfile(static_summary_file) and os.path.getsize(static_summary_file) > 0,
@@ -4379,10 +4399,10 @@ def main():
 
         # --- Create tree filtered by motifs ---
         prefix="Motifs"
-        first_prefix=f"07.1_{args.ortholog_prefix}"
-        second_prefix=f"07.2_{args.ortholog_prefix}"
-        motifs_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_candidates_group_around_bait.txt")
-        motifs_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidate_2_bait_mapping_file.txt")
+        first_prefix=f"05_Heme_motif_{args.ortholog_prefix}"
+        second_prefix=f"05_Heme_motif_{args.ortholog_prefix}"
+        motifs_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_baits_to_candidates.txt")
+        motifs_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidates_to_bait_mapping.txt")
         motifs_members_file = Path(fasta_folder) / f"{second_prefix}_candidate.fasta"
 
         motif_ortholog_files_exist = all ([
@@ -4391,7 +4411,7 @@ def main():
             os.path.isfile(motifs_members_file) and os.path.getsize(motifs_members_file) > 0
         ])
 
-        if not (os.path.isdir(tree_folder) and any(f.startswith("07") for f in os.listdir(tree_folder))) \
+        if not (os.path.isdir(tree_folder) and any(f.startswith("05") for f in os.listdir(tree_folder))) \
         or not motif_ortholog_files_exist:
         
             seq_id_list = []
@@ -4439,7 +4459,6 @@ def main():
                 group_around_ref_file=motifs_group_around_ref_file,
                 ref_mapping_file=motifs_ref_mapping_file,
                 filtered_fasta_file=motifs_members_file,
-                linneage_specific_fasta = ""
             )
         else:
             motifs_filtered_tree_path = os.path.join(tree_folder, f"{prefix}{first_prefix}_first_0_FastTree_tree.tre")
@@ -4447,18 +4466,15 @@ def main():
 
         tree_counter += 2
 
-        print("Step 6 completed.")
+        print("Step 5 completed.")
 
-        # --- 07 filter expression matrix for candidates --- # 
+        # --- 06 filter expression matrix for candidates --- # 
         if expression_matrix_path is None:
-            print("Step 7: No expression data provided. Skipping procession of expression data.")
-            # highest_expression_file = os.path.join(txt_folder, f"{args.name}07_highest_expression_placeholder.txt")
-            # with open(highest_expression_file, 'w') as f:
-            #     f.write("\n")
+            print("Step 6: No expression data provided. Skipping procession of expression data.")
             highest_expression_file = None
         else:
             print("Step 7: Process expression data.")
-            filtered_expression_file = os.path.join(txt_folder, f"{args.name}07_filtered_expression_matrix.txt")
+            filtered_expression_file = os.path.join(txt_folder, f"{args.name}06_filtered_expression_matrix.txt")
 
             if not (os.path.isfile(filtered_expression_file) and os.path.getsize(filtered_expression_file) > 0):
                 if expression_matrix_path is not None and os.path.isfile(expression_matrix_path):
@@ -4482,8 +4498,8 @@ def main():
                     print("No expression matrix provided or file not found - skipping expression filtering step")
             #else:
                 #print(f"Filtered expression matrix already exists: {filtered_expression_file}")
-            metadata_expression_file = filtered_expression_file.replace("07_filtered_expression_matrix", "07_metadata_expression_matrix")
-            metadata_only_expression_file = filtered_expression_file.replace("07_filtered_expression_matrix", "07_metadata_only_expression_matrix")
+            metadata_expression_file = filtered_expression_file.replace("06_filtered_expression_matrix", "06_metadata_expression_matrix")
+            metadata_only_expression_file = filtered_expression_file.replace("06_filtered_expression_matrix", "06_metadata_only_expression_matrix")
             metadata_files_exist_and_not_empty = all([
                     os.path.isfile(metadata_expression_file) and os.path.getsize(metadata_expression_file) > 0,
                     os.path.isfile(metadata_only_expression_file) and os.path.getsize(metadata_only_expression_file) > 0
@@ -4496,16 +4512,16 @@ def main():
 
             highest_expression_file = write_highest_expression_info(
                 filtered_expression_file,
-                metadata_expression_file=filtered_expression_file.replace("07_filtered_expression_matrix", "07_metadata_expression_matrix"),
-                metadata_only_expression_file=filtered_expression_file.replace("07_filtered_expression_matrix", "07_metadata_only_expression_matrix")
+                metadata_expression_file=filtered_expression_file.replace("06_filtered_expression_matrix", "06_metadata_expression_matrix"),
+                metadata_only_expression_file=filtered_expression_file.replace("06_filtered_expression_matrix", "06_metadata_only_expression_matrix")
             )
-            print("Step 7 completed.")
+            print("Step 6 completed.")
 
-        # --- 08 find in species-specific paralogs (in-paralogs) --- #
-        print("Step 8: Find in-species paralogs.")
+        # --- 07 find in species-specific paralogs (in-paralogs) --- #
+        print("Step 7: Find in-species paralogs.")
         if args.collapse.upper() in ['YES', 'Y']:
-            repr_clean_file = os.path.join(fasta_folder, f"{args.name}08_representative_paralogs_sequences.fasta")
-            paralog_group_file = os.path.join(txt_folder, f"{args.name}08_representative_paralogs_summary.txt")
+            repr_clean_file = os.path.join(fasta_folder, f"{args.name}07_representative_paralogs_sequences.fasta")
+            paralog_group_file = os.path.join(txt_folder, f"{args.name}07_representative_paralogs_summary.txt")
             
             paralog_files_exist_and_not_empty = all([
                 os.path.isfile(repr_clean_file) and os.path.getsize(repr_clean_file) > 0,
@@ -4514,7 +4530,7 @@ def main():
 
             if not paralog_files_exist_and_not_empty:
                 if expression_matrix_path is not None and metadata_path is not None:
-                    metadata_only_expression_file = filtered_expression_file.replace("07_filtered_expression_matrix", "07_metadata_only_expression_matrix")
+                    metadata_only_expression_file = filtered_expression_file.replace("06_filtered_expression_matrix", "06_metadata_only_expression_matrix")
                     paralog_groups = establish_paralog_groups_with_expression_filter(final_tree_path, final_members.keys(), args.paralogdist, 
                                                                                     metadata_only_expression_file, args.min_paralog_tpm)
                 else:
@@ -4557,13 +4573,13 @@ def main():
                                 out.write(gene + "\t" + ";".join(group) + "\n")
 
             if not (os.path.isdir(tree_folder) and any(f.startswith("08") for f in os.listdir(tree_folder))):
-                repr_tree_output_folder = os.path.join(supplement_folder, f"{args.name}08_repr_tree/")
-                repr_fin_aln_candidate_file = "08_repr_fin_alignment_candidates.fasta"
-                repr_fin_aln_input_file = "08_repr_fin_alignment_input.fasta"
-                repr_fin_aln_file = "08_repr_fin_alignment_input.fasta.aln"
-                repr_fin_cln_aln_file = "08_repr_fin_alignment_input.fasta.aln.cln"
+                repr_tree_output_folder = os.path.join(supplement_folder, f"{args.name}07_repr_tree/")
+                repr_fin_aln_candidate_file = "07_repr_fin_alignment_candidates.fasta"
+                repr_fin_aln_input_file = "07_repr_fin_alignment_input.fasta"
+                repr_fin_aln_file = "07_repr_fin_alignment_input.fasta.aln"
+                repr_fin_cln_aln_file = "07_repr_fin_alignment_input.fasta.aln.cln"
 
-                repr_tree_file = parallel_tree_constructor(
+                repr_tree_file = tree_constructor(
                     len(final_members),
                     repr_tree_output_folder,
                     repr_fin_aln_candidate_file,
@@ -4593,11 +4609,11 @@ def main():
 
             tree_counter += 1
         
-        print("Step 8 completed.")
+        print("Step 7 completed.")
 
-        # --- 09 create summary file --- #
-        print("Step 9: Create summary file.")
-        summary_file = os.path.join(txt_folder, f"{args.name}09_summary.txt")
+        # --- 08 create summary file --- #
+        print("Step 8: Create summary file.")
+        summary_file = os.path.join(txt_folder, f"{args.name}08_summary.txt")
 
         if not (os.path.isfile(summary_file) and os.path.getsize(summary_file) > 0):
             #print("Generating summary file...")
@@ -4637,10 +4653,10 @@ def main():
         else:
             print(f"Summary file already exists: {summary_file}")
 
-        print("Step 9 completed.")
+        print("Step 8 completed.")
 
-        # --- 10 Export --- #
-        print("Step 10: Export.")
+        # --- 09 Export --- #
+        print("Step 9: Export.")
         # --- Tree plotting --- #
         ete3_available = importlib.util.find_spec("ete3") is not None
         if ete3_available and (not os.path.exists(tree_folder) or not any(f.endswith((".png", ".pdf", ".svg")) for f in os.listdir(tree_folder)) or len(os.listdir(tree_folder)) <  (tree_counter * 3)):
@@ -4684,7 +4700,7 @@ def main():
         else:
             print(f"HTML overview already exists: {html_link_file}")     
 
-        print("Step 10 completed.")
+        print("Step 9 completed.")
 
         sys.stdout.write("\n" + "Successfully finished execution. " + "\n")
         print("\n")
