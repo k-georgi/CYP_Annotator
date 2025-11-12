@@ -2948,11 +2948,11 @@ def use_metadata(filtered_expression_file, metadata_path, metadata_expression_fi
     #print(f"Metadata-annotated expression matrix written to: {metadata_expression_file}")
     #print(f"Metadata-only expression matrix written to: {metadata_only_expression_file}")
 
-def write_highest_expression_info(filtered_expression_file, highest_expression_file, metadata_expression_file=None, metadata_only_expression_file=None):
+def write_highest_expression_info(filtered_expression_file, metadata_expression_file=None, metadata_only_expression_file=None):
     """
     Write information about the highest expressed gene for each sample.
     """
-    highest_expression_file = filtered_expression_file.replace("07_filtered_expression_matrix", "07_highest_expression")
+    highest_expression_file = filtered_expression_file.replace("06_filtered_expression_matrix", "06_highest_expression")
 
     # Step 1: Read original expression values
     with open(filtered_expression_file, 'r') as f:
@@ -4613,7 +4613,7 @@ def main():
                         for line in filtered_lines:
                             out.write(line + '\n')
 
-                    print(f"{len(expressed)} candidates classified as expressed.")
+                    #print(f"{len(expressed)} candidates classified as expressed.")
                     #print(f"{len(potential_pseudogenes)} candidates classified as potential pseudogenes.")
                 else:
                     print("No expression matrix provided or file not found - skipping expression filtering step")
