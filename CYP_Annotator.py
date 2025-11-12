@@ -2068,7 +2068,7 @@ def perform_candidate_tree_analysis(
     if not os.path.isfile(group_around_ref_file) or os.path.getsize(group_around_ref_file) == 0:
         with open(group_around_ref_file, "w") as out:
             out.write(
-                "Bait_Member\tBait_Evidence_Level\t"
+                "Bait_Member\tDescription\tBait_Evidence_Level\t"
                 "Subfamily_Candidate_Members\tSubfamily_Thresholds\t"
                 "Family_Candidate_Members\tFamily_Thresholds\n"
             )
@@ -2076,6 +2076,9 @@ def perform_candidate_tree_analysis(
             for ref_gene in sorted(all_ref_genes):
                 if ref_gene not in bait_groups:
                     continue
+
+                # Get Description from baits_info (column 6)
+                description = baits_info.get(ref_gene, {}).get('Description', '-')
 
                 # Subfamily members & thresholds
                 subfamily_entries = subfamily_mapping.get(ref_gene, [])
@@ -2097,7 +2100,7 @@ def perform_candidate_tree_analysis(
 
                 group = bait_groups.get(ref_gene, 'unknown')
                 out.write(
-                    f"{ref_gene}\t{group}\t"
+                    f"{ref_gene}\t{description}\t{group}\t"
                     f"{'; '.join(subfamily_names)}\t{'; '.join(subfamily_thresholds)}\t"
                     f"{'; '.join(family_names)}\t{'; '.join(family_thresholds)}\n"
                 )
@@ -2107,9 +2110,9 @@ def perform_candidate_tree_analysis(
         with open(ref_mapping_file, "w") as out:
             header = (
                 "Candidate_Member\tOriginal_ID\t"
-                "Subfamily_Level_Ortholog\tSubfamily_Evidence_Level\tSubfamily_Family\tSubfamily_Subfamily\t"
+                "Subfamily_Level_Ortholog\tSubfamily_Description\tSubfamily_Evidence_Level\tSubfamily_Family\tSubfamily_Subfamily\t"
                 "Subfamily_Edge_Distance\tSubfamily_Patristic_Distance\tSubfamily_Threshold\t"
-                "Family_Level_Ortholog\tFamily_Evidence_Level\tFamily_Family\tFamily_Subfamily\t"
+                "Family_Level_Ortholog\tFamily_Description\tFamily_Evidence_Level\tFamily_Family\tFamily_Subfamily\t"
                 "Family_Edge_Distance\tFamily_Patristic_Distance\tFamily_Threshold\n"
             )
             out.write(header)
@@ -2139,28 +2142,33 @@ def perform_candidate_tree_analysis(
                     sub_ortho = subfamily_assign[i] if i < len(subfamily_assign) else {}
                     fam_ortho = family_assign[i] if i < len(family_assign) else {}
 
+                    # subfamily data
                     sub_id = sub_ortho.get('ref_id', '-')
+                    sub_info = baits_info.get(sub_id, {})
+                    sub_desc = sub_info.get('Description', '-')
                     sub_grp = bait_groups.get(sub_id, '-')
-                    sub_fam = baits_info.get(sub_id, {}).get('Family', '-')
-                    sub_subfam = baits_info.get(sub_id, {}).get('Subfamily', '-')
+                    sub_fam = sub_info.get('Family', '-')
+                    sub_subfam = sub_info.get('Subfamily', '-')
                     sub_edges = str(sub_ortho.get('edges', ''))
                     sub_patr = str(sub_ortho.get('patr', ''))
                     sub_thr = str(sub_ortho.get('sub_thr', ''))
 
+                    #family data
                     fam_id = fam_ortho.get('ref_id', '-')
+                    fam_info = baits_info.get(fam_id, {})
+                    fam_desc = fam_info.get('Description', '-')
                     fam_grp = bait_groups.get(fam_id, '-')
-                    fam_fam = baits_info.get(fam_id, {}).get('Family', '-')
-                    fam_subfam = baits_info.get(fam_id, {}).get('Subfamily', '-')
+                    fam_fam = fam_info.get('Family', '-')
+                    fam_subfam = fam_info.get('Subfamily', '-')
                     fam_edges = str(fam_ortho.get('edges', ''))
                     fam_patr = str(fam_ortho.get('patr', ''))
                     fam_thr = str(fam_ortho.get('fam_thr', ''))
 
-                    # ÄNDERUNG: Candidate_Member und Original_ID werden in JEDER Zeile eingetragen
                     out.write("\t".join([
-                        new_gene,  # Immer die Clean_ID eintragen
-                        subject_name_mapping_table.get(new_gene, ''),  # Immer die Original_ID eintragen
-                        sub_id, sub_grp, sub_fam, sub_subfam, sub_edges, sub_patr, sub_thr,
-                        fam_id, fam_grp, fam_fam, fam_subfam, fam_edges, fam_patr, fam_thr
+                        new_gene,
+                        subject_name_mapping_table.get(new_gene, ''),
+                        sub_id, sub_desc, sub_grp, sub_fam, sub_subfam, sub_edges, sub_patr, sub_thr,
+                        fam_id, fam_desc, fam_grp, fam_fam, fam_subfam, fam_edges, fam_patr, fam_thr
                     ]) + "\n")
 
                 ref_name = new_gene
@@ -3261,6 +3269,128 @@ def build_paralog_groups_for_itol(
 
 # region Summary
 """Region to collect and summarize data in a summary table."""
+# def collect_summary_data(
+#         ref_mapping_file,
+#         baits_info,
+#         best_domain_match_file=None,
+#         motif_check_file_summary=None,
+#         highest_expression_file=None,
+#         paralog_group_file=None
+#         ):
+#     """
+#     Collects data for the summary table from multiple input files.
+#     Returns a dictionary mapping Clean_IDs to lists of summary data
+#     """
+    
+#     summary_data = {}
+#     clean_to_original_id_map = {} 
+#     valid_clean_ids = set()
+
+#     # Step 1: Parse reference mapping file
+#     # Column indices (0-based):
+#     # parts[0] = Candidate_Member (Clean_ID) - used as dictionary key
+#     # parts[1] = Original_ID
+#     # parts[2] = Subfamily_Level_Ortholog (primary reference gene)
+#     # parts[9] = Family_Level_Ortholog (fallback reference gene)
+#     with open(ref_mapping_file, 'r') as f:
+#         next(f, None)  # Skip header
+        
+#         for line in f:
+#             parts = line.strip().split('\t')
+#             if len(parts) < 10:
+#                 continue
+            
+#             clean_id = parts[0].strip()
+#             original_id = parts[1].strip()
+            
+#             # Process only lines with both IDs present
+#             if clean_id and original_id:
+                
+#                 # Ensure each Clean_ID appears only once
+#                 if clean_id in summary_data:
+#                     continue
+                
+#                 # Use subfamily ortholog, fallback to family ortholog if unavailable
+#                 gene_id = parts[2].strip() 
+#                 if gene_id == "-":
+#                     gene_id = parts[9].strip()
+                
+#                 # Only include assigned candidates
+#                 if gene_id != "-":
+#                     summary_data[clean_id] = [clean_id, gene_id]
+#                     clean_to_original_id_map[clean_id] = original_id
+#                     valid_clean_ids.add(clean_id)
+
+#     # Step 2: Add family and subfamily information
+#     for seq_id in list(summary_data.keys()):
+#         gene_id = summary_data[seq_id][1]  
+#         baits_info_row = baits_info.get(gene_id, {})
+#         col4 = baits_info_row.get("Family", "-")
+#         col5 = baits_info_row.get("Subfamily", "-")
+#         summary_data[seq_id].extend([col4, col5])
+
+#     # Step 3: Add best domain matches (keyed by Original_ID)
+#     best_domain_dict = {}
+#     if best_domain_match_file:
+#         with open(best_domain_match_file, 'r') as f:
+#             next(f)
+#             for line in f:
+#                 parts = line.strip().split('\t')
+#                 if len(parts) >= 2:
+#                     best_domain_dict[parts[0]] = parts[1]
+    
+#     for seq_id in list(summary_data.keys()):
+#         original_id = clean_to_original_id_map.get(seq_id)
+#         summary_data[seq_id].append(best_domain_dict.get(original_id, "-"))
+
+#     # Step 4: Add motif presence data (keyed by Original_ID)
+#     motif_dict = {}
+#     if motif_check_file_summary:
+#         with open(motif_check_file_summary, 'r') as f:
+#             next(f)
+#             for line in f:
+#                 parts = line.strip().split('\t')
+#                 if len(parts) >= 7:
+#                     motif_dict[parts[0]] = parts[1:7]
+    
+#     for seq_id in list(summary_data.keys()):
+#         original_id = clean_to_original_id_map.get(seq_id)
+#         summary_data[seq_id].extend(motif_dict.get(original_id, ["-"] * 6))
+
+#     # Step 5: Add highest expression information (keyed by Clean_ID)
+#     expression_dict = {}
+#     if highest_expression_file:
+#         with open(highest_expression_file, 'r') as f:
+#             next(f)
+#             for line in f:
+#                 parts = line.strip().split('\t')
+#                 if len(parts) >= 5:
+#                     expression_dict[parts[0]] = parts[1:5]
+    
+#     for seq_id in list(summary_data.keys()):
+#         summary_data[seq_id].extend(expression_dict.get(seq_id, ["-"] * 4))
+
+#     # Step 6: Determine representative paralogs (keyed by Clean_ID)
+#     repr_ids = set()
+#     if paralog_group_file:
+#         with open(paralog_group_file, 'r') as f:
+#             next(f)
+#             for line in f:
+#                 if "\t" in line:
+#                     parts = line.strip().split("\t")
+#                     repr_id = parts[0].strip()
+#                     repr_ids.add(repr_id)
+    
+#     for seq_id in list(summary_data.keys()):
+#         summary_data[seq_id].append("YES" if seq_id in repr_ids else "NO")
+
+#     # Final validation: Remove any entries not in original valid Clean_IDs
+#     keys_to_remove = [key for key in summary_data.keys() if key not in valid_clean_ids]
+#     for key in keys_to_remove:
+#         del summary_data[key]
+
+#     return summary_data
+
 def collect_summary_data(
         ref_mapping_file,
         baits_info,
@@ -3279,11 +3409,6 @@ def collect_summary_data(
     valid_clean_ids = set()
 
     # Step 1: Parse reference mapping file
-    # Column indices (0-based):
-    # parts[0] = Candidate_Member (Clean_ID) - used as dictionary key
-    # parts[1] = Original_ID
-    # parts[2] = Subfamily_Level_Ortholog (primary reference gene)
-    # parts[9] = Family_Level_Ortholog (fallback reference gene)
     with open(ref_mapping_file, 'r') as f:
         next(f, None)  # Skip header
         
@@ -3295,33 +3420,29 @@ def collect_summary_data(
             clean_id = parts[0].strip()
             original_id = parts[1].strip()
             
-            # Process only lines with both IDs present
             if clean_id and original_id:
-                
-                # Ensure each Clean_ID appears only once
                 if clean_id in summary_data:
                     continue
                 
-                # Use subfamily ortholog, fallback to family ortholog if unavailable
                 gene_id = parts[2].strip() 
                 if gene_id == "-":
-                    gene_id = parts[9].strip()
+                    gene_id = parts[10].strip()
                 
-                # Only include assigned candidates
                 if gene_id != "-":
-                    summary_data[clean_id] = [clean_id, gene_id]
+                    summary_data[clean_id] = [clean_id, gene_id] 
                     clean_to_original_id_map[clean_id] = original_id
                     valid_clean_ids.add(clean_id)
 
-    # Step 2: Add family and subfamily information
+    # Step 2: Add Description, Family, and Subfamily information
     for seq_id in list(summary_data.keys()):
-        gene_id = summary_data[seq_id][1]  
+        gene_id = summary_data[seq_id][1]
         baits_info_row = baits_info.get(gene_id, {})
-        col4 = baits_info_row.get("Family", "-")
-        col5 = baits_info_row.get("Subfamily", "-")
-        summary_data[seq_id].extend([col4, col5])
+        col_desc = baits_info_row.get("Description", "-")
+        col_fam = baits_info_row.get("Family", "-")
+        col_subfam = baits_info_row.get("Subfamily", "-")
+        summary_data[seq_id].extend([col_desc, col_fam, col_subfam])
 
-    # Step 3: Add best domain matches (keyed by Original_ID)
+    # Step 3: Add best domain matches 
     best_domain_dict = {}
     if best_domain_match_file:
         with open(best_domain_match_file, 'r') as f:
@@ -3329,13 +3450,13 @@ def collect_summary_data(
             for line in f:
                 parts = line.strip().split('\t')
                 if len(parts) >= 2:
-                    best_domain_dict[parts[0]] = parts[1]
+                    best_domain_dict[parts[0]] = parts[1] # Key = Original_ID
     
-    for seq_id in list(summary_data.keys()):
+    for seq_id in list(summary_data.keys()): 
         original_id = clean_to_original_id_map.get(seq_id)
         summary_data[seq_id].append(best_domain_dict.get(original_id, "-"))
 
-    # Step 4: Add motif presence data (keyed by Original_ID)
+    # Step 4: Add motif presence data
     motif_dict = {}
     if motif_check_file_summary:
         with open(motif_check_file_summary, 'r') as f:
@@ -3343,13 +3464,13 @@ def collect_summary_data(
             for line in f:
                 parts = line.strip().split('\t')
                 if len(parts) >= 7:
-                    motif_dict[parts[0]] = parts[1:7]
+                    motif_dict[parts[0]] = parts[1:7] 
     
-    for seq_id in list(summary_data.keys()):
+    for seq_id in list(summary_data.keys()): 
         original_id = clean_to_original_id_map.get(seq_id)
         summary_data[seq_id].extend(motif_dict.get(original_id, ["-"] * 6))
 
-    # Step 5: Add highest expression information (keyed by Clean_ID)
+    # Step 5: Add highest expression information
     expression_dict = {}
     if highest_expression_file:
         with open(highest_expression_file, 'r') as f:
@@ -3362,7 +3483,7 @@ def collect_summary_data(
     for seq_id in list(summary_data.keys()):
         summary_data[seq_id].extend(expression_dict.get(seq_id, ["-"] * 4))
 
-    # Step 6: Determine representative paralogs (keyed by Clean_ID)
+    # Step 6: Determine representative paralogs
     repr_ids = set()
     if paralog_group_file:
         with open(paralog_group_file, 'r') as f:
@@ -4572,7 +4693,7 @@ def main():
                             if gene in group:
                                 out.write(gene + "\t" + ";".join(group) + "\n")
 
-            if not (os.path.isdir(tree_folder) and any(f.startswith("08") for f in os.listdir(tree_folder))):
+            if not (os.path.isdir(tree_folder) and any(f.startswith("07") for f in os.listdir(tree_folder))):
                 repr_tree_output_folder = os.path.join(supplement_folder, f"{args.name}07_repr_tree/")
                 repr_fin_aln_candidate_file = "07_repr_fin_alignment_candidates.fasta"
                 repr_fin_aln_input_file = "07_repr_fin_alignment_input.fasta"
@@ -4588,7 +4709,7 @@ def main():
                     repr_fin_cln_aln_file,
                     baits_path,
                     repr_clean_file,
-                    "08_representatives_baits_",
+                    "07_representatives_baits_",
                     "",
                     args.mode_aln,
                     args.mode_tree,
@@ -4628,7 +4749,7 @@ def main():
             )
 
             header = [
-                "ID", "Bait_Reference_Gene", "", "",
+                "ID", "Bait_Reference_Gene", "", "", "",
                 "Domain_Check",
                 "Motifs_Check", "", "", "", "", "",
                 "Expression", "", "", "",
@@ -4636,7 +4757,7 @@ def main():
             ]
 
             subheader = [
-                "ID", "Ref_Gene", "Ref_Family", "Ref_Subfamily",
+                "ID", "Ref_Gene", "Ref_Description", "Ref_Family", "Ref_Subfamily",
                 "Best_Domain",
                 "Proline-enriched_region", "C-terminal_helix", "I-helix", "EXXR", "PERF", "Heme-binding_region",
                 "Highest_Run", "TPM", "Highest_Run_with_Metadata", "TPM_with_Metadata",
@@ -4646,8 +4767,9 @@ def main():
             with open(summary_file, "w") as out:
                 out.write("\t".join(header) + "\n")
                 out.write("\t".join(subheader) + "\n")
+                # Sicherstellen, dass alle Einträge als Strings geschrieben werden
                 for seq_id in sorted(summary_data.keys()):
-                    out.write("\t".join(summary_data[seq_id]) + "\n")
+                    out.write("\t".join(map(str, summary_data[seq_id])) + "\n")
 
             #print(f"Summary file written to: {summary_file}")
         else:
