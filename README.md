@@ -148,7 +148,7 @@ python3 CYP_Annotator.py --file_collection <PATH_TO_FILE_COLLECTION_CSV>
 
 ### Adjustment of input data files
 
-The pipeline relies on several key input files. You can provide them using one of the three methods described in the **Usage** section.
+The pipeline relies on several key input files. You can provide them using one of the three methods described in the **Usage** section. All input files, exept the subject file (needs to be provided by the user) can be found in the repository Data folder (https://github.com/k-georgi/CYP_Annotator/tree/main/Data).
 
 |File|Argument|Description|Format
 |--|--|--|--
