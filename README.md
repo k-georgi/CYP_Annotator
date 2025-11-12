@@ -2,7 +2,7 @@
 
 ## Overview
 
-CYP-Annotator is a Python pipeline designed for the automatic, functional annotation of Cytochrome P450 (CYP) sequences. It processes "Subject" datasets (genomes or transcriptomes) to identify CYP candidates by comparing them against a curated set of "Bait" (reference) sequences (https://github.com/k-georgi/CYP_Annotator/Data).
+CYP-Annotator is a Python pipeline designed for the automatic, functional annotation of Cytochrome P450 (CYP) sequences. It processes "Subject" datasets (genomes or transcriptomes) to identify CYP candidates by comparing them against a curated set of "Bait" (reference) sequences (https://github.com/k-georgi/CYP_Annotator/tree/main/Data).
 
 The workflow performs the following steps:
 
@@ -84,7 +84,7 @@ python3 CYP_Annotator.py --file_collection <PATH_TO_FILE_COLLECTION_CSV>
 
 |Command|Description|Default
 |--|--|--
-|`--mode_aln <STR>` |Tool used for multiple alignments (mafft|muscle)|`mafft`
+|`--mode_aln <STR>` |Tool used for multiple alignments (`mafft|muscle`)|`mafft`
 |`--mode_tree <STR>` |Tool used for tree construction (fasttree|raxml|iqtree)|`fasttree`
 |`--mafft <STR>` |MAFFT command|`mafft`
 |`--muscle <STR>` |MUSCLE command|`muscle`
