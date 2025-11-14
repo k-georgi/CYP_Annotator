@@ -20,6 +20,17 @@ This tool adapts functions and logic from the **MYB\_annotator** ([doi: 10.1186/
 
 ## Setup
 
+###Installation in a conda environment
+
+A straightforward way to install the dependencies is by creating a conda environment using the provided environment.yml file:
+
+```batch
+git clone https://github.com/k-georgi/CYP_Annotator
+cd CYP_Annotator
+conda env create -f environment.yml
+conda activate cyp_annotator
+```
+
 ### Installation of the dependencies
 
 The following dependencies are necessary for the execution of the pipeline:
