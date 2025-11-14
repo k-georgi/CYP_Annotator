@@ -22,7 +22,7 @@ This tool adapts functions and logic from the **MYB\_annotator** ([doi: 10.1186/
 
 ###Installation in a conda environment
 
-A straightforward way to install the dependencies is by creating a conda environment using the provided environment.yml file:
+A straightforward way to install the dependencies is by creating a conda environment using the provided `environment.yml` file:
 
 ```batch
 git clone https://github.com/k-georgi/CYP_Annotator
