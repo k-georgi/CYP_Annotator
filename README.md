@@ -54,7 +54,7 @@ The pipeline is executed via the command line, using **exactly one** of the foll
 python3 CYP_Annotator.py --data <PATH_TO_DATA_FOLDER>
 
 # Method 2: Using explicit paths
-python3 CYP_Annotator.py --baits <PATH> --subject <PATH> --baits_info <PATH> --hmm_domains <PATH> --protein_motifs <PATH>
+python3 CYP_Annotator.py --baits <PATH> --subject <PATH> --baits_info <PATH>
 
 # Method 3: Using a file collection CSV
 python3 CYP_Annotator.py --file_collection <PATH_TO_FILE_COLLECTION_CSV>
