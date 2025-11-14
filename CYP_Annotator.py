@@ -638,7 +638,7 @@ def prepare_input_files(args: 'argparse.Namespace') -> Dict[str, any]:
 
     # Explicit paths override data folder paths
     if args.subject:
-        raw_paths['subject_files'] = collect_fasta_files([args.subject])
+        raw_paths['subject_files'] = collect_fasta_files(args.subject)
     if args.baits:
         raw_paths['bait_file'] = args.baits
     if args.baits_info:
@@ -969,7 +969,64 @@ def find_case_insensitive_file(directory: Path, filename: str) -> Optional[str]:
             return str(f)
     return None
 
-def read_file_collection_csv(csv_path: str) -> Dict[str, str]:
+# def read_file_collection_csv(csv_path: str) -> Dict[str, str]:
+#     """
+#     Read file collection CSV and return paths as dictionary.
+#     CSV format: First row headers, second row paths.
+#     Returns dictionary with keys: Data, Baits, Baits_Info, etc.
+#     """
+#     paths = {}
+#     try:
+#         with open(csv_path, 'r', newline='') as f:
+#             reader = csv.reader(f)
+#             headers = next(reader)
+#             values = next(reader)
+            
+#             expected_columns = [
+#                 'Data', 'Subject', 'Baits', 'Baits_Info', 'HMM_Domains', 
+#                 'HMM_Motifs', 'Protein_Motifs', 'Expression', 'Metadata'
+#             ]
+            
+#             # if not all(col in headers for col in expected_columns):
+#             #     raise ValueError("CSV file is missing required columns")
+            
+#             # for header, value in zip(headers, values):
+#             #     if header in expected_columns and value.strip():
+#             #         path = Path(value.strip())
+#             #         if not path.is_absolute():
+#             #             path = Path.cwd() / path
+#             #         paths[header] = str(path.resolve())
+
+#             for header, value in zip(headers, values):
+#                 if header in expected_columns and value.strip():
+                    
+#                     if header == 'Subject':
+#                         path_strings = value.strip().split(';')
+#                         subject_paths = []
+                        
+#                         for p_str in path_strings:
+#                             if not p_str.strip():
+#                                 continue
+                            
+#                             path = Path(p_str.strip())
+#                             if not path.is_absolute():
+#                                 path = csv_dir / path
+#                             subject_paths.append(str(path.resolve()))
+                        
+#                         paths[header] = subject_paths 
+                    
+#                     else:
+#                         path = Path(value.strip())
+#                         if not path.is_absolute():
+#                             path = csv_dir / path
+#                         paths[header] = str(path.resolve())
+    
+#     except Exception as e:
+#         raise ValueError(f"Error reading file collection CSV {csv_path}: {str(e)}")
+    
+#     return paths
+
+def read_file_collection_csv(csv_path):
     """
     Read file collection CSV and return paths as dictionary.
     CSV format: First row headers, second row paths.
@@ -977,25 +1034,53 @@ def read_file_collection_csv(csv_path: str) -> Dict[str, str]:
     """
     paths = {}
     try:
+        # Pfad relativ zur CSV-Datei auflösen
+        csv_dir = Path(csv_path).resolve().parent
+
         with open(csv_path, 'r', newline='') as f:
             reader = csv.reader(f)
             headers = next(reader)
             values = next(reader)
             
+            # NEU: "Subject" zur Liste der erwarteten Spalten hinzugefügt
             expected_columns = [
                 'Data', 'Baits', 'Baits_Info', 'HMM_Domains', 
-                'HMM_Motifs', 'Protein_Motifs', 'Expression', 'Metadata'
+                'HMM_Motifs', 'Protein_Motifs', 'Expression', 'Metadata',
+                'Subject' 
             ]
             
-            if not all(col in headers for col in expected_columns):
-                raise ValueError("CSV file is missing required columns")
+            # (Validierungs-Check von 'expected_columns' bleibt wie im Original)
+            # if not all(col in headers for col in expected_columns):
+            #     raise ValueError("CSV file is missing required columns")
             
             for header, value in zip(headers, values):
                 if header in expected_columns and value.strip():
-                    path = Path(value.strip())
-                    if not path.is_absolute():
-                        path = Path.cwd() / path
-                    paths[header] = str(path.resolve())
+                    
+                    # --- NEUE LOGIK HIER ---
+                    if header == 'Subject':
+                        # Annahme: Mehrere Pfade sind durch Semikolon (;) getrennt
+                        path_strings = value.strip().split(';')
+                        subject_paths = []
+                        
+                        for p_str in path_strings:
+                            if not p_str.strip():
+                                continue
+                            
+                            path = Path(p_str.strip())
+                            if not path.is_absolute():
+                                path = csv_dir / path
+                            subject_paths.append(str(path.resolve()))
+                        
+                        # Speichert eine Liste von Pfaden
+                        paths[header] = subject_paths 
+                    
+                    else:
+                        # Original-Logik für alle anderen Spalten
+                        path = Path(value.strip())
+                        if not path.is_absolute():
+                            path = csv_dir / path
+                        paths[header] = str(path.resolve())
+                    # --- ENDE NEUE LOGIK ---
     
     except Exception as e:
         raise ValueError(f"Error reading file collection CSV {csv_path}: {str(e)}")
@@ -3949,6 +4034,8 @@ def main():
             args.data = csv_paths['Data']
         else:
             # Assign paths from CSV if Data path not provided
+            if csv_paths.get('Subject'):
+                args.subject = csv_paths.get('Subject')
             args.baits = csv_paths.get('Baits')
             args.baits_info = csv_paths.get('Baits_Info')
             args.hmm_domains = csv_paths.get('HMM_Domains')
