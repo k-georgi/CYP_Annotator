@@ -2928,8 +2928,6 @@ def use_metadata(filtered_expression_file, metadata_path, metadata_expression_fi
             new_sample_ids.append(f"{sid}(no metadata)")
 
     # Step 3: Write new output files ---
-    # metadata_expression_file = filtered_expression_file.replace("07_filtered_expression_matrix", "07_metadata_expression_matrix")
-    # metadata_only_expression_file = filtered_expression_file.replace("07_filtered_expression_matrix", "07_metadata_only_expression_matrix")
 
     with open(metadata_expression_file, 'w') as out_all, open(metadata_only_expression_file, 'w') as out_meta:
         # Write headers
@@ -3876,9 +3874,9 @@ def generate_heatmaps_from_expression_data(txt_folder, heatmap_folder, format = 
     """
 
     filenames = [
-        "07_filtered_expression_matrix.txt",
-        "07_metadata_expression_matrix.txt",
-        "07_metadata_only_expression_matrix.txt"
+        "06_filtered_expression_matrix.txt",
+        "06_metadata_expression_matrix.txt",
+        "06_metadata_only_expression_matrix.txt"
     ]
 
     for filename in filenames:
