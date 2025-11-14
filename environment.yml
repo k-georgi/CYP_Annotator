@@ -1,0 +1,22 @@
+name: cyp_env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  # Python & Libraries
+  - python=3.11
+  - dendropy
+  - pandas
+  - matplotlib
+  - seaborn
+  - ete3
+  - gsl
+  # External Tools
+  - blast
+  - hmmer
+  - mafft
+  - muscle
+  - fasttree
+  - iqtree
+  - raxml-ng
