@@ -2346,7 +2346,7 @@ def domain_check(
     )
 
     # Read and process results
-    hmmcheck = pd.read_csv(hmmresult, delim_whitespace=True, comment="#", header=None)
+    hmmcheck = pd.read_csv(hmmresult, sep=r'\s+', comment="#", header=None, engine='python')
     hmmcheck = hmmcheck[hmmcheck[13] > hmm_score].sort_values(11).drop_duplicates([0, 3])
 
     domain_names = sorted(set(hmmcheck[3]))
@@ -2557,7 +2557,7 @@ def motif_check(
     )
 
     # Process results
-    hmmcheck = pd.read_csv(hmmresult, delim_whitespace=True, comment="#", header=None)
+    hmmcheck = pd.read_csv(hmmresult, sep=r'\s+', comment="#", header=None, engine='python')
     hmmcheck = hmmcheck[hmmcheck[11] < cEvalue].sort_values(11).drop_duplicates([0, 3])
     
     motifs = list(set(hmmcheck[3]))
