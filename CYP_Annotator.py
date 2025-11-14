@@ -866,37 +866,23 @@ def is_nucleotide_sequence(sequence: str) -> bool:
     return all(c in "ACGTN" for c in clean_seq)
 
 def translate_sequences(sequences: Dict[str, str]) -> Dict[str, str]:
-#     """Translate nucleotide sequences to peptide sequences."""
-#     return {seq_id: str(seq(re.sub(r'[\- ]', '', seq)).translate()) for seq_id, seq in sequences.items()}
-
     translated_sequences = {}
         
     for seq_id, nuc_sequence in sequences.items():
-        
-        # 1. Sequenz säubern (wie im Originalcode)
-        #    .upper() ist wichtig, da die codon_table Großbuchstaben erwartet.
         cleaned_seq = re.sub(r'[\- ]', '', nuc_sequence).upper()
         
         peptide_seq = []
         
-        # 2. Sequenz in 3er-Schritten (Codons) durchlaufen
-        #    Der range-Stop stellt sicher, dass wir nur vollständige Codons nehmen
-        #    (z.B. bei einer Länge von 7 wird nur bis Index 6 (Pos 0, 1, 2, 3, 4, 5) gegangen)
         for i in range(0, len(cleaned_seq) - (len(cleaned_seq) % 3), 3):
             codon = cleaned_seq[i:i+3]
             
-            # 3. Codon übersetzen
-            #    .get(codon, 'X') gibt 'X' zurück, falls das Codon nicht
-            #    gefunden wird (z.B. 'NNN' oder andere ambigue Basen).
             amino_acid = GENETIC_CODE.get(codon, 'X')
             
-            # 4. Bei Stop-Codon die Translation beenden
             if amino_acid == '*':
                 break
             
             peptide_seq.append(amino_acid)
         
-        # Das Dictionary mit der übersetzten Sequenz füllen
         translated_sequences[seq_id] = "".join(peptide_seq)
         
     return translated_sequences
@@ -985,12 +971,14 @@ def read_file_collection_csv(csv_path):
             values = next(reader)
             
             expected_columns = [
-                'Data', 'Subject', 'Baits', 'Baits_Info', 'HMM_Domains', 
-                'HMM_Motifs', 'Protein_Motifs', 'Expression', 'Metadata'
+                'Data', 'Baits', 'Baits_Info', 'HMM_Domains', 
+                'HMM_Motifs', 'Protein_Motifs', 'Expression', 'Metadata',
+                'Subject' 
             ]
             
             for header, value in zip(headers, values):
                 if header in expected_columns and value.strip():
+                    
                     if header == 'Subject':
                         path_strings = value.strip().split(';')
                         subject_paths = []
@@ -3282,128 +3270,6 @@ def build_paralog_groups_for_itol(
 
 # region Summary
 """Region to collect and summarize data in a summary table."""
-# def collect_summary_data(
-#         ref_mapping_file,
-#         baits_info,
-#         best_domain_match_file=None,
-#         motif_check_file_summary=None,
-#         highest_expression_file=None,
-#         paralog_group_file=None
-#         ):
-#     """
-#     Collects data for the summary table from multiple input files.
-#     Returns a dictionary mapping Clean_IDs to lists of summary data
-#     """
-    
-#     summary_data = {}
-#     clean_to_original_id_map = {} 
-#     valid_clean_ids = set()
-
-#     # Step 1: Parse reference mapping file
-#     # Column indices (0-based):
-#     # parts[0] = Candidate_Member (Clean_ID) - used as dictionary key
-#     # parts[1] = Original_ID
-#     # parts[2] = Subfamily_Level_Ortholog (primary reference gene)
-#     # parts[9] = Family_Level_Ortholog (fallback reference gene)
-#     with open(ref_mapping_file, 'r') as f:
-#         next(f, None)  # Skip header
-        
-#         for line in f:
-#             parts = line.strip().split('\t')
-#             if len(parts) < 10:
-#                 continue
-            
-#             clean_id = parts[0].strip()
-#             original_id = parts[1].strip()
-            
-#             # Process only lines with both IDs present
-#             if clean_id and original_id:
-                
-#                 # Ensure each Clean_ID appears only once
-#                 if clean_id in summary_data:
-#                     continue
-                
-#                 # Use subfamily ortholog, fallback to family ortholog if unavailable
-#                 gene_id = parts[2].strip() 
-#                 if gene_id == "-":
-#                     gene_id = parts[9].strip()
-                
-#                 # Only include assigned candidates
-#                 if gene_id != "-":
-#                     summary_data[clean_id] = [clean_id, gene_id]
-#                     clean_to_original_id_map[clean_id] = original_id
-#                     valid_clean_ids.add(clean_id)
-
-#     # Step 2: Add family and subfamily information
-#     for seq_id in list(summary_data.keys()):
-#         gene_id = summary_data[seq_id][1]  
-#         baits_info_row = baits_info.get(gene_id, {})
-#         col4 = baits_info_row.get("Family", "-")
-#         col5 = baits_info_row.get("Subfamily", "-")
-#         summary_data[seq_id].extend([col4, col5])
-
-#     # Step 3: Add best domain matches (keyed by Original_ID)
-#     best_domain_dict = {}
-#     if best_domain_match_file:
-#         with open(best_domain_match_file, 'r') as f:
-#             next(f)
-#             for line in f:
-#                 parts = line.strip().split('\t')
-#                 if len(parts) >= 2:
-#                     best_domain_dict[parts[0]] = parts[1]
-    
-#     for seq_id in list(summary_data.keys()):
-#         original_id = clean_to_original_id_map.get(seq_id)
-#         summary_data[seq_id].append(best_domain_dict.get(original_id, "-"))
-
-#     # Step 4: Add motif presence data (keyed by Original_ID)
-#     motif_dict = {}
-#     if motif_check_file_summary:
-#         with open(motif_check_file_summary, 'r') as f:
-#             next(f)
-#             for line in f:
-#                 parts = line.strip().split('\t')
-#                 if len(parts) >= 7:
-#                     motif_dict[parts[0]] = parts[1:7]
-    
-#     for seq_id in list(summary_data.keys()):
-#         original_id = clean_to_original_id_map.get(seq_id)
-#         summary_data[seq_id].extend(motif_dict.get(original_id, ["-"] * 6))
-
-#     # Step 5: Add highest expression information (keyed by Clean_ID)
-#     expression_dict = {}
-#     if highest_expression_file:
-#         with open(highest_expression_file, 'r') as f:
-#             next(f)
-#             for line in f:
-#                 parts = line.strip().split('\t')
-#                 if len(parts) >= 5:
-#                     expression_dict[parts[0]] = parts[1:5]
-    
-#     for seq_id in list(summary_data.keys()):
-#         summary_data[seq_id].extend(expression_dict.get(seq_id, ["-"] * 4))
-
-#     # Step 6: Determine representative paralogs (keyed by Clean_ID)
-#     repr_ids = set()
-#     if paralog_group_file:
-#         with open(paralog_group_file, 'r') as f:
-#             next(f)
-#             for line in f:
-#                 if "\t" in line:
-#                     parts = line.strip().split("\t")
-#                     repr_id = parts[0].strip()
-#                     repr_ids.add(repr_id)
-    
-#     for seq_id in list(summary_data.keys()):
-#         summary_data[seq_id].append("YES" if seq_id in repr_ids else "NO")
-
-#     # Final validation: Remove any entries not in original valid Clean_IDs
-#     keys_to_remove = [key for key in summary_data.keys() if key not in valid_clean_ids]
-#     for key in keys_to_remove:
-#         del summary_data[key]
-
-#     return summary_data
-
 def collect_summary_data(
         ref_mapping_file,
         baits_info,
@@ -4367,7 +4233,7 @@ def main():
         final_members = read_fasta(final_members_file)
         tree_counter += 2
 
-        # --- 04 Optional: Individual analysis with selected bait sequences --- #
+        # --- 03 Optional: Individual analysis with selected bait sequences --- #
         if args.individual_tree.upper() in ["YES", "Y"]:
             if args.individual_ortholog_prefix is None:
                 args.individual_ortholog_prefix = args.bait_keyword.split()[0]
@@ -4418,191 +4284,200 @@ def main():
         print("Step 3 completed.")
 
         # --- 04 check for protein domains --- #
-        print("Step 4: Check for protein domains.")
-        domain_check_file_summary = os.path.join(txt_folder, f"{args.name}04_domain_check.txt")
-        best_domain_match_file = os.path.join(txt_folder, f"{args.name}04_best_domain_match.txt")
-        domain_check_hmm_result = os.path.join(supplement_folder, "04_domain_hmmsearch.txt")
-        domain_check_hmm_output = os.path.join(supplement_folder, "04_domain_hmmsearch_output.txt")
+        if (os.path.isfile(str(hmm_domains_path)) and os.path.getsize(str(hmm_domains_path)) > 0):
+            print("Step 4: Check for protein domains.")
+            domain_check_file_summary = os.path.join(txt_folder, f"{args.name}04_domain_check.txt")
+            best_domain_match_file = os.path.join(txt_folder, f"{args.name}04_best_domain_match.txt")
+            domain_check_hmm_result = os.path.join(supplement_folder, "04_domain_hmmsearch.txt")
+            domain_check_hmm_output = os.path.join(supplement_folder, "04_domain_hmmsearch_output.txt")
 
-        domain_files_exist_and_not_empty = all([
-            os.path.isfile(domain_check_file_summary) and os.path.getsize(domain_check_file_summary) > 0,
-            os.path.isfile(best_domain_match_file) and os.path.getsize(best_domain_match_file) > 0
-        ])
+            domain_files_exist_and_not_empty = all([
+                os.path.isfile(domain_check_file_summary) and os.path.getsize(domain_check_file_summary) > 0,
+                os.path.isfile(best_domain_match_file) and os.path.getsize(best_domain_match_file) > 0
+            ])
 
-        if not domain_files_exist_and_not_empty:
-            if hmm_domains_path is not None:
-                domain_check_results, best_domain_match, domain_names = domain_check(
-                    final_members_file,
-                    hmm_domains_path,
-                    domain_check_hmm_result,
-                    domain_check_hmm_output,
-                    args.hmmsearch,
-                    args.domain_Score
-                )
+            if not domain_files_exist_and_not_empty:
+                if hmm_domains_path is not None:
+                    domain_check_results, best_domain_match, domain_names = domain_check(
+                        final_members_file,
+                        hmm_domains_path,
+                        domain_check_hmm_result,
+                        domain_check_hmm_output,
+                        args.hmmsearch,
+                        args.domain_Score
+                    )
 
-                ref_family = load_ortholog_family(filtered_ref_mapping_file)
-                with open(domain_check_file_summary, "w") as out1:
-                    out1.write("RefMember\t" + "\t".join(domain_names) + "\n")
-                    candidates = list(sorted(final_members.keys()))
-                    for candidate in candidates:
-                        new_line = [subject_name_mapping_table[candidate]]
-                        for dom in domain_names:
-                            new_line.append("YES" if domain_check_results[candidate].get(dom, "") else "NO")
-                        out1.write("\t".join(new_line) + "\n")
+                    ref_family = load_ortholog_family(filtered_ref_mapping_file)
+                    with open(domain_check_file_summary, "w") as out1:
+                        out1.write("RefMember\t" + "\t".join(domain_names) + "\n")
+                        candidates = list(sorted(final_members.keys()))
+                        for candidate in candidates:
+                            new_line = [subject_name_mapping_table[candidate]]
+                            for dom in domain_names:
+                                new_line.append("YES" if domain_check_results[candidate].get(dom, "") else "NO")
+                            out1.write("\t".join(new_line) + "\n")
 
-                with open(best_domain_match_file, "w") as out2:
-                    out2.write("RefMember\tBestDomain\tOrtholog_Family\n")
-                    for candidate in sorted(final_members.keys()):
-                        best_dom = best_domain_match.get(candidate, "-")
-                        candidate_name = subject_name_mapping_table[candidate]
-                        ortholog_family = ref_family.get(candidate_name, "None")
-                        out2.write(f"{candidate_name}\t{best_dom}\t{ortholog_family}\n")
-                        
-        print("Step 4 completed.")
+                    with open(best_domain_match_file, "w") as out2:
+                        out2.write("RefMember\tBestDomain\tOrtholog_Family\n")
+                        for candidate in sorted(final_members.keys()):
+                            best_dom = best_domain_match.get(candidate, "-")
+                            candidate_name = subject_name_mapping_table[candidate]
+                            ortholog_family = ref_family.get(candidate_name, "None")
+                            out2.write(f"{candidate_name}\t{best_dom}\t{ortholog_family}\n")
+                            
+            print("Step 4 completed.")
+        else:
+            print("Step 4: No domain hmm provided. Skipping domain analysis.")
+            best_domain_match_file=None
 
         # --- 05 check for common protein motifs --- #
-        print("Step 5: Check for common protein motifs.")
-        static_summary_file = os.path.join(txt_folder, f"{args.name}05_static_motif_check_summary.txt")
-        static_results_file = os.path.join(txt_folder, f"{args.name}05_static_motif_check_results.txt")
-        hmm_summary_file = os.path.join(txt_folder, f"{args.name}05_hmm_motif_check_summary.txt")
-        hmm_results_file = os.path.join(txt_folder, f"{args.name}05_hmm_motif_check_results.txt")
+        if (os.path.isfile(str(protein_motifs_path)) and os.path.getsize(str(protein_motifs_path)) > 0):
+            print("Step 5: Check for common protein motifs.")
+            static_summary_file = os.path.join(txt_folder, f"{args.name}05_static_motif_check_summary.txt")
+            static_results_file = os.path.join(txt_folder, f"{args.name}05_static_motif_check_results.txt")
+            hmm_summary_file = os.path.join(txt_folder, f"{args.name}05_hmm_motif_check_summary.txt")
+            hmm_results_file = os.path.join(txt_folder, f"{args.name}05_hmm_motif_check_results.txt")
 
-        motif_check_hmm_result = os.path.join(supplement_folder, "05_motif_hmmsearch.txt")
-        motif_check_hmm_output = os.path.join(supplement_folder, "05_motif_hmmsearch_output.txt")
+            motif_check_hmm_result = os.path.join(supplement_folder, "05_motif_hmmsearch.txt")
+            motif_check_hmm_output = os.path.join(supplement_folder, "05_motif_hmmsearch_output.txt")
 
-        static_motif_files_exist_and_not_empty = all([
-            os.path.isfile(static_summary_file) and os.path.getsize(static_summary_file) > 0,
-            os.path.isfile(static_results_file) and os.path.getsize(static_results_file) > 0,
-        ])
+            static_motif_files_exist_and_not_empty = all([
+                os.path.isfile(static_summary_file) and os.path.getsize(static_summary_file) > 0,
+                os.path.isfile(static_results_file) and os.path.getsize(static_results_file) > 0,
+            ])
 
-        if not static_motif_files_exist_and_not_empty:
-            # --- Static motif check ---
-            static_motif_results = static_motif_check(final_members_file, protein_motifs_path)
-            static_data, static_motif_names = static_motif_results
+            if not static_motif_files_exist_and_not_empty:
+                # --- Static motif check ---
+                static_motif_results = static_motif_check(final_members_file, protein_motifs_path)
+                static_data, static_motif_names = static_motif_results
 
-            # Claculate raw motifs lenghts
-            raw_static_lengths = {}
-            with open(protein_motifs_path, 'r') as f:
-                for line in f.readlines()[1:]:
-                    if line.strip():
-                        parts = line.strip().split('\t')
-                        if len(parts) >= 2:
-                            name, pattern = parts[0], parts[1]
-                            mlen = len(pattern.replace("(", "").replace(")", "").replace("/", ""))
-                            raw_static_lengths[name] = mlen
-            static_flanks = {motif: (0, 0) for motif in static_motif_names}
+                # Claculate raw motifs lenghts
+                raw_static_lengths = {}
+                with open(protein_motifs_path, 'r') as f:
+                    for line in f.readlines()[1:]:
+                        if line.strip():
+                            parts = line.strip().split('\t')
+                            if len(parts) >= 2:
+                                name, pattern = parts[0], parts[1]
+                                mlen = len(pattern.replace("(", "").replace(")", "").replace("/", ""))
+                                raw_static_lengths[name] = mlen
+                static_flanks = {motif: (0, 0) for motif in static_motif_names}
 
-            write_motif_output(static_summary_file, static_results_file, static_data, static_motif_names,
-                               raw_static_lengths, static_flanks, final_members, subject_name_mapping_table)
+                write_motif_output(static_summary_file, static_results_file, static_data, static_motif_names,
+                                raw_static_lengths, static_flanks, final_members, subject_name_mapping_table)
 
-        hmm_motif_files_exist_and_not_empty = all([
-            os.path.isfile(hmm_summary_file) and os.path.getsize(hmm_summary_file) > 0,
-            os.path.isfile(hmm_results_file) and os.path.getsize(hmm_results_file) > 0,
-            os.path.isfile(motif_check_hmm_result) and os.path.getsize(motif_check_hmm_result) > 0
-        ])
+            hmm_motif_files_exist_and_not_empty = all([
+                os.path.isfile(hmm_summary_file) and os.path.getsize(hmm_summary_file) > 0,
+                os.path.isfile(hmm_results_file) and os.path.getsize(hmm_results_file) > 0,
+                os.path.isfile(motif_check_hmm_result) and os.path.getsize(motif_check_hmm_result) > 0
+            ])
 
-        if not hmm_motif_files_exist_and_not_empty:
-        # --- HMM motif check ---
-            if hmm_motifs_path is None and protein_motifs_path is not None:
-                CYP_source = literature_baits_path if literature_baits_path else baits_path
-                hmm_motifs_path, raw_hmm_lengths = create_motif_from_baits(
-                    protein_motifs_path, CYP_source, supplement_folder, 
-                    mafft_available, muscle_available, flanklength=0
+            if not hmm_motif_files_exist_and_not_empty:
+            # --- HMM motif check ---
+                if hmm_motifs_path is None and protein_motifs_path is not None:
+                    CYP_source = literature_baits_path if literature_baits_path else baits_path
+                    hmm_motifs_path, raw_hmm_lengths = create_motif_from_baits(
+                        protein_motifs_path, CYP_source, supplement_folder, 
+                        mafft_available, muscle_available, flanklength=0
+                    )
+                else:
+                    raw_hmm_lengths = {}
+
+                hmm_motif_names, hmm_lengths = parse_motif_names_lengths(hmm_motifs_path)
+                target_hmm_len = max(hmm_lengths.values())
+                target_hmm_len += 4 if target_hmm_len % 2 == 0 else 5
+
+                hmm_flanks = {}
+                for motif, length in hmm_lengths.items():
+                    pad_total = target_hmm_len - length
+                    flank_left = pad_total // 2
+                    flank_right = pad_total - flank_left
+                    hmm_flanks[motif] = (flank_left, flank_right)
+
+                hmm_motif_results = motif_check(
+                    final_members_file, hmm_motifs_path,
+                    motif_check_hmm_result, motif_check_hmm_output,
+                    args.hmmsearch, args.motif_cEvalue
+                )
+                hmm_data = hmm_motif_results[0]
+
+                write_motif_output(hmm_summary_file, hmm_results_file, hmm_data, hmm_motif_names,
+                                hmm_lengths, hmm_flanks, final_members, subject_name_mapping_table)
+
+            # --- Create tree filtered by motifs ---
+            prefix="Motifs"
+            first_prefix=f"05_Heme_motif_{args.ortholog_prefix}"
+            second_prefix=f"05_Heme_motif_{args.ortholog_prefix}"
+            motifs_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_baits_to_candidates.txt")
+            motifs_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidates_to_bait_mapping.txt")
+            motifs_members_file = Path(fasta_folder) / f"{second_prefix}_candidate.fasta"
+
+            motif_ortholog_files_exist = all ([
+                os.path.isfile(motifs_group_around_ref_file) and os.path.getsize(motifs_group_around_ref_file) > 0,
+                os.path.isfile(motifs_ref_mapping_file) and os.path.getsize(motifs_ref_mapping_file) > 0,
+                os.path.isfile(motifs_members_file) and os.path.getsize(motifs_members_file) > 0
+            ])
+
+            if not (os.path.isdir(tree_folder) and any(f.startswith("05") for f in os.listdir(tree_folder))) \
+            or not motif_ortholog_files_exist:
+            
+                seq_id_list = []
+                motif_members = {}
+
+                try:
+                    with open(static_summary_file, mode='r', newline='') as infile:
+                        # CSV-Reader für eine Tab-separierte Datei erstellen
+                        reader = csv.reader(infile, delimiter='\t')
+
+                        # 2. Kopfzeile überspringen
+                        header = next(reader, None)
+
+                        # 3. Über die Datenzeilen iterieren
+                        for row in reader:
+                            # Sicherheitsabfrage, ob die Zeile genügend Spalten hat
+                            if len(row) > 6:
+                                seq_id = row[0]  # Erste Spalte
+                                heme_motif = row[6] # Siebte Spalte
+                                if heme_motif == 'YES':
+                                    seq_id_list.append(seq_id)
+                                    if seq_id in final_members.keys():
+                                        motif_members[seq_id] = final_members[seq_id]
+
+
+                except FileNotFoundError:
+                    print(f"Error: '{static_summary_file}' not found.")
+
+                motif_fasta_file = os.path.join(supplement_folder, f"motifs_to_tree.fasta")
+                write_fasta(motif_members, Path(motif_fasta_file))
+
+                motifs_filtered_tree_path, motifs_final_tree_path = perform_candidate_tree_analysis(
+                    prefix=prefix,
+                    first_prefix=first_prefix,
+                    second_prefix=second_prefix,
+                    bait_fasta_path=baits_path,
+                    clean_members=motif_members,
+                    clean_members_file=motif_fasta_file,
+                    baits_info=baits_info,
+                    subject_name_mapping_table=subject_name_mapping_table,
+                    bait_groups=bait_groups,
+                    args=args,
+                    supplement_folder=supplement_folder,
+                    tree_folder=tree_folder,
+                    group_around_ref_file=motifs_group_around_ref_file,
+                    ref_mapping_file=motifs_ref_mapping_file,
+                    filtered_fasta_file=motifs_members_file,
                 )
             else:
-                raw_hmm_lengths = {}
+                motifs_filtered_tree_path = os.path.join(tree_folder, f"{prefix}{first_prefix}_first_0_FastTree_tree.tre")
+                motifs_final_tree_path = os.path.join(tree_folder, f"{prefix}{second_prefix}_final_0_FastTree_tree.tre")
 
-            hmm_motif_names, hmm_lengths = parse_motif_names_lengths(hmm_motifs_path)
-            target_hmm_len = max(hmm_lengths.values())
-            target_hmm_len += 4 if target_hmm_len % 2 == 0 else 5
+            tree_counter += 2
 
-            hmm_flanks = {}
-            for motif, length in hmm_lengths.items():
-                pad_total = target_hmm_len - length
-                flank_left = pad_total // 2
-                flank_right = pad_total - flank_left
-                hmm_flanks[motif] = (flank_left, flank_right)
-
-            hmm_motif_results = motif_check(
-                final_members_file, hmm_motifs_path,
-                motif_check_hmm_result, motif_check_hmm_output,
-                args.hmmsearch, args.motif_cEvalue
-            )
-            hmm_data = hmm_motif_results[0]
-
-            write_motif_output(hmm_summary_file, hmm_results_file, hmm_data, hmm_motif_names,
-                               hmm_lengths, hmm_flanks, final_members, subject_name_mapping_table)
-
-        # --- Create tree filtered by motifs ---
-        prefix="Motifs"
-        first_prefix=f"05_Heme_motif_{args.ortholog_prefix}"
-        second_prefix=f"05_Heme_motif_{args.ortholog_prefix}"
-        motifs_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_baits_to_candidates.txt")
-        motifs_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidates_to_bait_mapping.txt")
-        motifs_members_file = Path(fasta_folder) / f"{second_prefix}_candidate.fasta"
-
-        motif_ortholog_files_exist = all ([
-            os.path.isfile(motifs_group_around_ref_file) and os.path.getsize(motifs_group_around_ref_file) > 0,
-            os.path.isfile(motifs_ref_mapping_file) and os.path.getsize(motifs_ref_mapping_file) > 0,
-            os.path.isfile(motifs_members_file) and os.path.getsize(motifs_members_file) > 0
-        ])
-
-        if not (os.path.isdir(tree_folder) and any(f.startswith("05") for f in os.listdir(tree_folder))) \
-        or not motif_ortholog_files_exist:
+            print("Step 5 completed.")
         
-            seq_id_list = []
-            motif_members = {}
-
-            try:
-                with open(static_summary_file, mode='r', newline='') as infile:
-                    # CSV-Reader für eine Tab-separierte Datei erstellen
-                    reader = csv.reader(infile, delimiter='\t')
-
-                    # 2. Kopfzeile überspringen
-                    header = next(reader, None)
-
-                    # 3. Über die Datenzeilen iterieren
-                    for row in reader:
-                        # Sicherheitsabfrage, ob die Zeile genügend Spalten hat
-                        if len(row) > 6:
-                            seq_id = row[0]  # Erste Spalte
-                            heme_motif = row[6] # Siebte Spalte
-                            if heme_motif == 'YES':
-                                seq_id_list.append(seq_id)
-                                if seq_id in final_members.keys():
-                                    motif_members[seq_id] = final_members[seq_id]
-
-
-            except FileNotFoundError:
-                print(f"Error: '{static_summary_file}' not found.")
-
-            motif_fasta_file = os.path.join(supplement_folder, f"motifs_to_tree.fasta")
-            write_fasta(motif_members, Path(motif_fasta_file))
-
-            motifs_filtered_tree_path, motifs_final_tree_path = perform_candidate_tree_analysis(
-                prefix=prefix,
-                first_prefix=first_prefix,
-                second_prefix=second_prefix,
-                bait_fasta_path=baits_path,
-                clean_members=motif_members,
-                clean_members_file=motif_fasta_file,
-                baits_info=baits_info,
-                subject_name_mapping_table=subject_name_mapping_table,
-                bait_groups=bait_groups,
-                args=args,
-                supplement_folder=supplement_folder,
-                tree_folder=tree_folder,
-                group_around_ref_file=motifs_group_around_ref_file,
-                ref_mapping_file=motifs_ref_mapping_file,
-                filtered_fasta_file=motifs_members_file,
-            )
         else:
-            motifs_filtered_tree_path = os.path.join(tree_folder, f"{prefix}{first_prefix}_first_0_FastTree_tree.tre")
-            motifs_final_tree_path = os.path.join(tree_folder, f"{prefix}{second_prefix}_final_0_FastTree_tree.tre")
-
-        tree_counter += 2
-
-        print("Step 5 completed.")
+            print("Step 5: No protein motifs provided. Skipping motifs analysis.")
+            static_summary_file=None
 
         # --- 06 filter expression matrix for candidates --- # 
         if expression_matrix_path is None:
