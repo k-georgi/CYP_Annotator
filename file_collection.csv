@@ -1,2 +1,2 @@
-Data,Baits,Baits_Info,HMM_Domains,HMM_Motifs,Protein_Motifs,Expression,Metadata
-/Users/karstengeorgi/Documents/CYP_Annotator/Run/Data,,,,,,,
+Data,Subject,Baits,Baits_Info,HMM_Domains,HMM_Motifs,Protein_Motifs,Expression,Metadata
+,Data/subjects/Example.fasta,Data/baits.fasta,Data/baits_info.csv,Data/hmm_domains.hmm,,Data/protein_motifs.txt,,
