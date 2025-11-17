@@ -1573,11 +1573,8 @@ def tree_constructor(num_process_candidates, tree_output_folder,
                     prefix = os.path.join(tree_output_folder, f"{name}{number}{i}_IQTREE_tree")
                     tree_file = f"{prefix}.treefile"  # IQ-TREE writes the final ML tree here
                     if not os.path.isfile(tree_file):
-                        # IQ-TREE typical options:
-                        # -s: alignment, -m: model, -T: threads, -pre: output prefix
-                        #cmd = [iqtree, "-s", cln_aln, "-m", "LG+F+G", "-T", str(cpu_par), "-pre", prefix]
                         cmd = [iqtree, "-s", cln_aln, "-m", "LG+F+G", "-T", "AUTO", "-pre", prefix]
-                        print(f"Executing IQ-TREE command: {' '.join(cmd)}")  # all comments in English
+                        print(f"Executing IQ-TREE command: {' '.join(cmd)}")
                         # Run asynchronously; IQ-TREE writes to files (.log, .iqtree, .treefile)
                         p = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
                         tree_processes.append(p)
@@ -1586,9 +1583,9 @@ def tree_constructor(num_process_candidates, tree_output_folder,
 
                 else:
                     print(f"Unsupported tree mode: {mode_tree}. Skipping tree construction for chunk {i+1}.")
-                    continue # Springe zur nächsten Iteration
+                    continue
 
-                if tree_file: # Füge nur hinzu, wenn ein tree_file Name generiert wurde
+                if tree_file:
                     trees.append(tree_file)
                         
             except Exception as e:
@@ -1885,7 +1882,6 @@ def candidates_baits_assignment(
 
         # primary: patristic distance; tie-breaker: fewer edges preferred
         distances.sort(key=lambda x: (x['patr'], x['edges']))
-        # distances.sort(key=lambda x: x['patr'])
 
         for dist in distances:
             patr = dist.get('patr')
@@ -1930,8 +1926,6 @@ def candidates_baits_assignment(
                             fam_thr = float(mean_val) + float(factor) * float(std_val)
                             if fam_thr > family_threshold * 1.5:
                                 fam_thr = family_threshold * 1.5
-                            # elif fam_thr < sub_thr:
-                            #     fam_thr = sub_thr
                             elif fam_thr < 2.0:
                                 fam_thr = 2.0
                     elif fam_flag == "n":
@@ -1941,8 +1935,6 @@ def candidates_baits_assignment(
                             fam_thr = float(median_val) + float(factor) * float(iqr_val)
                             if fam_thr > family_threshold * 1.5:
                                 fam_thr = family_threshold * 1.5
-                            # elif fam_thr < sub_thr:
-                            #     fam_thr = sub_thr
                             elif fam_thr < 2.0:
                                 fam_thr = 2.0
 
@@ -2450,7 +2442,7 @@ def static_motif_check(fasta_file, motifs_path):
     motifs = []
     motif_names_list = []
     with open(motifs_path, 'r') as mfile:
-        for line in mfile.readlines()[1:]:  # Skip header
+        for line in mfile.readlines()[1:]:
             if line.strip():
                 parts = line.strip().split('\t')
                 if len(parts) >= 5:
@@ -2592,17 +2584,6 @@ def create_motif_from_baits(
 ):
     """
     Creates a combined HMM profile from motif definitions and bait sequences.
-
-    Steps:
-    1. Read motif definitions (name, pattern, score threshold, positional constraints).
-    2. Read bait sequences from FASTA file.
-    3. Search for motifs using BLOSUM62-based scoring.
-    4. Extract matched motif regions with flank extensions.
-    5. Perform multiple sequence alignment (MAFFT or MUSCLE).
-    6. Build HMM profile using `hmmbuild`.
-    7. Merge all HMM profiles into one file.
-    8. Clean up temporary files.
-
     Returns a tuple conataining a path to the final combined HMM file
     and a dictionary mapping motif names to their core lengths.
     """
@@ -2636,7 +2617,6 @@ def create_motif_from_baits(
     os.makedirs(temp_dir)
 
     try:
-        # Step 1: Read motif definitions
         motifs = []
         with open(protein_motifs_path, 'r') as mfile:
             for line in mfile.readlines()[1:]:
@@ -2650,7 +2630,6 @@ def create_motif_from_baits(
         bait_sequences = read_fasta(CYP_source)
         motif_records = {name: [] for name, *_ in motifs}
 
-        # Step 2: Search motifs in sequences
         for seq_id, seq in bait_sequences.items():
             seq = seq.upper()
             current_pos = 0
@@ -2680,7 +2659,6 @@ def create_motif_from_baits(
                     motif_records[name].append((header, frag))
                     current_pos = best_start + mlen
 
-        # Step 3–6: Align and build HMMs
         individual_hmm_files = []
         for name, records in motif_records.items():
             if len(records) < 2:
@@ -2709,7 +2687,6 @@ def create_motif_from_baits(
 
             individual_hmm_files.append(hmm_path)
 
-        # Step 7: Combine all HMMs into one file
         if not individual_hmm_files:
             raise RuntimeError("No HMMs could be built. Check motif definitions and bait sequences.")
 
@@ -2728,7 +2705,6 @@ def create_motif_from_baits(
         raise RuntimeError(f"A required tool failed to execute: {e.cmd}")
     
     finally:
-        # Step 8: Clean up temporary directory
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
 
@@ -2874,7 +2850,7 @@ def use_metadata(filtered_expression_file, metadata_path, metadata_expression_fi
     unused_metadata_path = os.path.join(os.path.dirname(filtered_expression_file), "unused_metadata.txt")
     unused_lines = []
 
-    # Step 1: Read metadata file
+    # Read metadata file
     with open(metadata_path, 'r', newline='') as meta_file:
         all_lines = meta_file.readlines()
 
@@ -2910,7 +2886,7 @@ def use_metadata(filtered_expression_file, metadata_path, metadata_expression_fi
                 out_unused.write(l + '\n')
         print(f"Skipped {len(unused_lines)} inconsistent metadata lines. See: {unused_metadata_path}")
 
-    # Step 2: Read the filtered expression matrix
+    # Read the filtered expression matrix
     with open(filtered_expression_file, 'r') as f:
         lines = f.readlines()
 
@@ -2931,7 +2907,7 @@ def use_metadata(filtered_expression_file, metadata_path, metadata_expression_fi
         else:
             new_sample_ids.append(f"{sid}(no metadata)")
 
-    # Step 3: Write new output files ---
+    # Write new output files ---
 
     with open(metadata_expression_file, 'w') as out_all, open(metadata_only_expression_file, 'w') as out_meta:
         # Write headers
@@ -2956,7 +2932,7 @@ def write_highest_expression_info(filtered_expression_file, metadata_expression_
     """
     highest_expression_file = filtered_expression_file.replace("06_filtered_expression_matrix", "06_highest_expression")
 
-    # Step 1: Read original expression values
+    # Read original expression values
     with open(filtered_expression_file, 'r') as f:
         lines = f.readlines()
 
@@ -2964,7 +2940,7 @@ def write_highest_expression_info(filtered_expression_file, metadata_expression_
     sample_ids = header[1:]
     gene_rows = [line.strip().split('\t') for line in lines[1:]]
 
-    # Step 2: Extract metadata from annotated expression matrix (if available)
+    # Extract metadata from annotated expression matrix (if available)
     metadata_info = {}
     metadata_available = metadata_expression_file and os.path.isfile(metadata_expression_file)
 
@@ -2980,7 +2956,7 @@ def write_highest_expression_info(filtered_expression_file, metadata_expression_
     else:
         metadata_info = {sid: "no metadata" for sid in sample_ids}
 
-    # Step 3: If metadata_only_expression_file is provided, parse it for AltSample + TPM info
+    # If metadata_only_expression_file is provided, parse it for AltSample + TPM info
     meta_expr_data = {}
     if metadata_only_expression_file and os.path.isfile(metadata_only_expression_file):
         with open(metadata_only_expression_file, 'r') as f:
@@ -3007,7 +2983,7 @@ def write_highest_expression_info(filtered_expression_file, metadata_expression_
     else:
         meta_expr_data = {}
 
-    # Step 4: Write output file
+    # Write output file
     with open(highest_expression_file, 'w') as out:
         out.write("GeneID\tBestSample\tBestTPM\tAltSample\tAltTPM\n")
         for row in gene_rows:
@@ -3046,15 +3022,14 @@ def establish_paralog_groups( tree_file, member_candidates, dist_cutoff_factor )
     """
 
     candidate_mapping_table = {}
-    for gene in member_candidates:    #candidate genes of new species
+    for gene in member_candidates:
         candidate_mapping_table.update( { gene: None } )
     
-    # --- find node objects of reference genes --- #
     tree = dendropy.Tree.get_from_path( tree_file, "newick" )
     pdm = dendropy.PhylogeneticDistanceMatrix.from_tree( tree )
     my_mean_nearest_taxon_distance = pdm.mean_nearest_taxon_distance()
     
-    new_node_objects = {}    #get new family candidate node objects
+    new_node_objects = {} 
     for node in tree.taxon_namespace:
         if node.label is not None:
             node.label = node.label.replace(" ", "_")
@@ -3064,7 +3039,7 @@ def establish_paralog_groups( tree_file, member_candidates, dist_cutoff_factor )
         except KeyError:
             pass
     
-    candidate_gene_nodes = [] # nodes of new candidates
+    candidate_gene_nodes = [] 
     for gene in member_candidates:
         candidate_gene_nodes.append( new_node_objects[ gene ] )
     
@@ -3077,7 +3052,7 @@ def establish_paralog_groups( tree_file, member_candidates, dist_cutoff_factor )
             paralogs = [ t1.label ]
             edge_distances = []
             patr_distances = {}
-            for t2 in tree.taxon_namespace:    #calculate distance to all other sequences in tree
+            for t2 in tree.taxon_namespace:    
                 try:
                     black_list[ t2.label ]
                 except KeyError:
@@ -3091,7 +3066,7 @@ def establish_paralog_groups( tree_file, member_candidates, dist_cutoff_factor )
                         paralogs.append( each['id'] )
                         black_list.update( { each['id']: None } )
                 except KeyError:
-                    break    #next neighbour is not a new candidate => break extension of paralog group
+                    break   
             paralog_collection.append( paralogs )
             black_list.update( { t1.label: None } )
 
@@ -3102,7 +3077,7 @@ def establish_paralog_groups_with_expression_filter(
     expression_matrix_path, min_paralog_tpm):
     """Create paralog groups while considering tissue-/condition-specific expression."""
 
-    # Step 1: Read expression matrix and metadata
+    # Read expression matrix and metadata
     expression_data = {}
     sample_conditions = {}
 
@@ -3121,7 +3096,7 @@ def establish_paralog_groups_with_expression_filter(
             values = list(map(float, parts[1:]))
             expression_data[gene_id] = dict(zip(sample_ids, values))
 
-    # Step 2: Load tree and identify candidate nodes
+    # Load tree and identify candidate nodes
     candidate_mapping_table = {gene: None for gene in member_candidates}
     tree = dendropy.Tree.get_from_path(tree_file, "newick")
     pdm = dendropy.PhylogeneticDistanceMatrix.from_tree(tree)
@@ -3130,7 +3105,7 @@ def establish_paralog_groups_with_expression_filter(
     new_node_objects = {node.label: node for node in tree.taxon_namespace if node.label in candidate_mapping_table}
     candidate_gene_nodes = [new_node_objects[gene] for gene in member_candidates]
 
-    # Step 3: Grouping with expression-based separation
+    # Grouping with expression-based separation
     black_list = {}
     paralog_collection = []
 
@@ -3153,7 +3128,6 @@ def establish_paralog_groups_with_expression_filter(
             if candidate not in candidate_mapping_table:
                 break
             if patr_distances[candidate] < mean_dist * dist_cutoff_factor:
-                # --- Expression-based filter --- #
                 keep_separate = False
                 if t1.label in expression_data and candidate in expression_data:
                     conds_t1 = {}
@@ -3216,7 +3190,6 @@ def get_represenative_paralog_per_group(paralog_groups, clean_members, repr_clea
                     annots.append(gene)
                 annotation_dict[rep_id] = annots
 
-    # Extension of 08_representative_paralogs.txt
     if metadata_expression_path:
         meta_output_file = repr_clean_file.replace(".fasta", ".txt")
         with open(meta_output_file, "w") as out:
@@ -3819,8 +3792,6 @@ def main():
 
     # Check required tools
     tools = check_required_tools()
-    # use_blast = tools['BLAST']
-    # use_hmmer = tools['HMMER']
     mafft_available = tools['MAFFT']
     muscle_available = tools['MUSCLE']
 
@@ -3857,7 +3828,6 @@ def main():
     protein_motifs_path = processed_paths.get('protein_motifs_path')
     hmm_motifs_path = processed_paths.get('hmm_motifs_path')
     hmm_domains_path = processed_paths.get('hmm_domains_path')
-    #baits_info_path = processed_paths.get('baits_info_path')
     expression_matrix_path = processed_paths.get('expression_path')
     metadata_path = processed_paths.get('metadata_path')
     
@@ -4424,18 +4394,12 @@ def main():
 
                 try:
                     with open(static_summary_file, mode='r', newline='') as infile:
-                        # CSV-Reader für eine Tab-separierte Datei erstellen
                         reader = csv.reader(infile, delimiter='\t')
-
-                        # 2. Kopfzeile überspringen
                         header = next(reader, None)
-
-                        # 3. Über die Datenzeilen iterieren
                         for row in reader:
-                            # Sicherheitsabfrage, ob die Zeile genügend Spalten hat
                             if len(row) > 6:
-                                seq_id = row[0]  # Erste Spalte
-                                heme_motif = row[6] # Siebte Spalte
+                                seq_id = row[0] 
+                                heme_motif = row[6]
                                 if heme_motif == 'YES':
                                     seq_id_list.append(seq_id)
                                     if seq_id in final_members.keys():
