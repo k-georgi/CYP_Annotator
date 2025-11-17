@@ -95,6 +95,7 @@ import math
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import os
+import glob
 import pandas as pd
 import random
 import re
@@ -106,13 +107,11 @@ import time
 
 from collections import defaultdict
 from operator import itemgetter
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 try:
-	import hashlib
+    import hashlib
 except ImportError:
-	pass
+    pass
 
 Tree, TreeStyle, NodeStyle, TextFace = None, None, None, None
 ete3_available = False
@@ -606,30 +605,29 @@ Region including utility functions for checking tool availability, collecting in
 preparing and processing FASTA/motif files, managing file paths, and generating metadata documentation.
 """
 
-def prepare_input_files(args: 'argparse.Namespace') -> Dict[str, any]:
+def prepare_input_files(args):
     """
     Finds all raw input files, processes them (clean, translate, copy),
     and returns a dictionary with paths to the processed files.
     This function combines the logic of collect_files and process_all_files.
     """
     # 1. Setup and Path Initialization
-    output_dir = args.processed_input_folder or os.path.join(args.output_folder, "Processed_Input/")
-    output_dir_path = Path(output_dir)
-    output_dir_path.mkdir(parents=True, exist_ok=True)
+    output_dir = args.processed_input_folder or os.path.join(args.output_folder, "Processed_Input")
+    os.makedirs(output_dir, exist_ok=True)
     
     raw_paths = {}
     processed_paths = {}
 
     # 2. Find Raw File Paths (from data folder and explicit args)
     if args.data:
-        data_path = Path(args.data)
-        if not data_path.is_dir():
+        data_path = args.data
+        if not os.path.isdir(data_path):
             raise ValueError(f"Data folder does not exist: {args.data}")
         
-        subjects_dir = data_path / "subjects"
-        raw_paths['subject_files'] = collect_fasta_files([str(p) for p in [data_path / "subject.fasta", subjects_dir] if p.exists()])
-        raw_paths['bait_file'] = str(data_path / "baits.fasta") if (data_path / "baits.fasta").exists() else None
-        raw_paths['baits_info_file'] = str(data_path / "baits_info.csv") if (data_path / "baits_info.csv").exists() else None
+        subjects_dir = os.path.join(data_path, "subjects")
+        raw_paths['subject_files'] = collect_fasta_files([p for p in [os.path.join(data_path, "subject.fasta"), subjects_dir] if os.path.exists(p)])
+        raw_paths['bait_file'] = os.path.join(data_path, "baits.fasta") if os.path.exists(os.path.join(data_path, "baits.fasta")) else None
+        raw_paths['baits_info_file'] = os.path.join(data_path, "baits_info.csv") if os.path.exists(os.path.join(data_path, "baits_info.csv")) else None
         raw_paths['protein_motifs_file'] = find_case_insensitive_file(data_path, "protein_motifs.txt")
         raw_paths['hmm_motifs_file'] = find_case_insensitive_file(data_path, "hmm_motifs.hmm")
         raw_paths['hmm_domains_file'] = find_case_insensitive_file(data_path, "hmm_domains.hmm")
@@ -657,9 +655,9 @@ def prepare_input_files(args: 'argparse.Namespace') -> Dict[str, any]:
     # 3. Validate Required Files
     if not raw_paths.get('subject_files'):
         raise ValueError("No valid subject files found")
-    if not raw_paths.get('bait_file') or not Path(raw_paths['bait_file']).is_file():
+    if not raw_paths.get('bait_file') or not os.path.isfile(raw_paths['bait_file']):
         raise ValueError("No valid bait file found")
-    if not raw_paths.get('baits_info_file') or not Path(raw_paths['baits_info_file']).is_file():
+    if not raw_paths.get('baits_info_file') or not os.path.isfile(raw_paths['baits_info_file']):
         raise ValueError("No valid baits info file found")
 
     # 4. Process Files
@@ -685,7 +683,7 @@ def prepare_input_files(args: 'argparse.Namespace') -> Dict[str, any]:
 
     # Process Subjects
     processed_paths['subject_files_paths'] = [
-        process_single_file(sf, Path(sf).stem, output_dir, args.trim_names) 
+        process_single_file(sf, os.path.splitext(os.path.basename(sf))[0], output_dir, args.trim_names) 
         for sf in raw_paths['subject_files']
     ]
 
@@ -705,7 +703,7 @@ def prepare_input_files(args: 'argparse.Namespace') -> Dict[str, any]:
 
     return processed_paths
 
-def check_required_tools() -> Dict[str, bool]:
+def check_required_tools():
     """Check installation of required bioinformatics tools."""
     tools = {
         'MAFFT': bool(shutil.which('mafft')),
@@ -738,28 +736,30 @@ def check_required_tools() -> Dict[str, bool]:
     return tools
 
 def process_baits_file(
-    bait_file: str,
-    baits_info: Dict[str, Dict[str, str]],
-    output_dir: str = "Processed_Input",
-    trim_names: str = 'n'
-) -> Tuple[str, str, str, str, str, str]:
+    bait_file,
+    baits_info,
+    output_dir = "Processed_Input",
+    trim_names = 'n'
+):
     """
     Process bait file and create group-specific files based on pre-read baits_info.
     Returns tuple of paths: (all_baits, no_outgroup, transcript, protein, literature, outgroup)
     """
-    output_dir_path = Path(output_dir)
+    output_dir_path = output_dir
     all_baits_path = process_single_file(bait_file, "baits_with_outgroup", output_dir, trim_names)
     sequences = read_fasta(all_baits_path)
 
     bait_groups = {seq_id: subdict.get("Evidence", "-") for seq_id, subdict in baits_info.items()}
 
     output_files = {
-        'no_outgroup': output_dir_path / "clean_baits.fasta", 'transcript': output_dir_path / "transcript_baits.fasta",
-        'protein': output_dir_path / "protein_baits.fasta", 'literature': output_dir_path / "literature_baits.fasta",
-        'outgroup': output_dir_path / "outgroup.fasta"
+        'no_outgroup': os.path.join(output_dir_path, "clean_baits.fasta"),
+        'transcript': os.path.join(output_dir_path, "transcript_baits.fasta"),
+        'protein': os.path.join(output_dir_path, "protein_baits.fasta"),
+        'literature': os.path.join(output_dir_path, "literature_baits.fasta"),
+        'outgroup': os.path.join(output_dir_path, "outgroup.fasta")
     }
 
-    if all(f.exists() for f in output_files.values()):
+    if all(os.path.exists(f) for f in output_files.values()):
         print("Group-specific bait files already exist, skipping creation.")
         return tuple([str(p) for p in [all_baits_path] + list(output_files.values())])
 
@@ -783,7 +783,7 @@ def process_baits_file(
 
     return tuple([str(p) for p in [all_baits_path] + list(output_files.values())])
 
-def read_baits_info(baits_info_file: str) -> Tuple[Dict[str, Dict[str, str]], List[str]]:
+def read_baits_info(baits_info_file):
     """Read baits_info CSV and return ID-to-attribute dictionary and header list."""
     baits_info, headers = {}, []
     try:
@@ -799,14 +799,14 @@ def read_baits_info(baits_info_file: str) -> Tuple[Dict[str, Dict[str, str]], Li
     return baits_info, headers
 
 def process_single_file(
-    input_file: str, output_name: str, output_dir: str = "Processed_Input", trim_names: str = 'n'
-) -> str:
+    input_file, output_name, output_dir = "Processed_Input", trim_names = 'n'
+):
     """Process a single FASTA file: clean, translate, write output and mapping."""
-    output_dir_path = Path(output_dir)
-    output_fasta = output_dir_path / f"{output_name}.fasta"
-    mapping_file = output_dir_path / f"{output_name}_mapping.txt"
+    output_dir_path = output_dir
+    output_fasta = os.path.join(output_dir_path, f"{output_name}.fasta")
+    mapping_file = os.path.join(output_dir_path, f"{output_name}_mapping.txt")
 
-    if output_fasta.exists() and mapping_file.exists():
+    if os.path.exists(output_fasta) and os.path.exists(mapping_file):
         print(f"{input_file} already processed, skipping.")
         return str(output_fasta)
 
@@ -822,7 +822,7 @@ def process_single_file(
     write_mapping_table(sequence_mapping, mapping_file)
     return str(output_fasta)
 
-def load_and_process_sequences(file_path: str, trim_names: str = 'n') -> Dict[str, str]:
+def load_and_process_sequences(file_path, trim_names = 'n'):
     """Load FASTA sequences and translate if nucleotide."""
     sequences = read_fasta(file_path)
     if sequences and is_nucleotide_sequence(next(iter(sequences.values()))):
@@ -831,7 +831,7 @@ def load_and_process_sequences(file_path: str, trim_names: str = 'n') -> Dict[st
         sequences = {clean_sequence_id(seq_id, trim_names): seq for seq_id, seq in sequences.items()}
     return sequences
 
-def read_fasta(file_path: str) -> Dict[str, str]:
+def read_fasta(file_path):
     """Read FASTA file and return sequences dictionary."""
     sequences = {}
     current_id = None
@@ -860,12 +860,12 @@ def read_fasta(file_path: str) -> Dict[str, str]:
     except Exception as e:
         raise ValueError(f"Error reading FASTA file {file_path}: {str(e)}")
 
-def is_nucleotide_sequence(sequence: str) -> bool:
+def is_nucleotide_sequence(sequence):
     """Determine if sequence is nucleotide or peptide."""
     clean_seq = re.sub(r'[\- ]', '', sequence[:100])
     return all(c in "ACGTN" for c in clean_seq)
 
-def translate_sequences(sequences: Dict[str, str]) -> Dict[str, str]:
+def translate_sequences(sequences):
     translated_sequences = {}
         
     for seq_id, nuc_sequence in sequences.items():
@@ -887,32 +887,32 @@ def translate_sequences(sequences: Dict[str, str]) -> Dict[str, str]:
         
     return translated_sequences
 
-def clean_sequence_id(seq_id: str, trim_names: str = 'n') -> str:
+def clean_sequence_id(seq_id, trim_names = 'n'):
     """Clean sequence ID by removing forbidden characters and optionally trimming."""
     if trim_names.upper() in ['Y', 'YES']:
         seq_id = seq_id.split()[0]
     seq_id = re.sub(r'[():,;]', '-', seq_id)
     return seq_id.encode("ascii", "ignore").decode()
 
-def write_fasta(sequences: Dict[str, str], output_path: Path) -> None:
+def write_fasta(sequences, output_path):
     """Write sequences to FASTA file."""
-    if output_path.exists() and output_path.stat().st_size > 0: return
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 0: return
     with open(output_path, 'w') as f:
         for seq_id, sequence in sequences.items():
             f.write(f">{seq_id}\n{sequence}\n")
 
-def write_mapping_table(mapping: Dict[str, str], output_path: Path) -> None:
+def write_mapping_table(mapping, output_path):
     """Write sequence ID mapping table."""
-    if output_path.exists() and output_path.stat().st_size > 0: return
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 0: return
     with open(output_path, 'w') as f:
         f.write("InitialID\tCleanID\n")
         for original_id, cleaned_id in mapping.items():
             f.write(f"{original_id}\t{cleaned_id}\n")
 
-def process_expression_file(input_file: str, output_name: str, output_dir: str, trim_names: str) -> str:
+def process_expression_file(input_file, output_name, output_dir, trim_names):
     """Process expression file, cleaning IDs in the first column."""
-    output_path = Path(output_dir) / f"{output_name}.txt"
-    if output_path.exists() and output_path.stat().st_size > 0: return str(output_path)
+    output_path = os.path.join(output_dir, f"{output_name}.txt")
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 0: return str(output_path)
     try:
         with open(input_file, 'r') as infile, open(output_path, 'w') as outfile:
             outfile.write(infile.readline()) # header
@@ -925,33 +925,34 @@ def process_expression_file(input_file: str, output_name: str, output_dir: str, 
     except Exception as e:
         raise ValueError(f"Failed to process expression file {input_file}: {e}")
 
-def copy_file(input_file: str, output_name: str, output_dir: str) -> str:
+def copy_file(input_file, output_name, output_dir):
     """Copy file to output directory with new name."""
-    output_dir_path = Path(output_dir)
+    output_dir_path = output_dir
     suffix = ".hmm" if "hmm" in output_name else ".txt"
-    output_path = output_dir_path / f"{output_name}{suffix}"
-    if output_path.exists() and output_path.stat().st_size > 0: return str(output_path)
+    output_path = os.path.join(output_dir_path, f"{output_name}{suffix}")
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 0: return str(output_path)
     try:
         shutil.copy(input_file, output_path)
         return str(output_path)
     except Exception as e:
         raise ValueError(f"Failed to copy {input_file} to {output_path}: {e}")
 
-def collect_fasta_files(paths: List[str]) -> List[str]:
+def collect_fasta_files(paths):
     """Collect FASTA files from given paths (files or directories)."""
     files = []
     for path_str in paths:
-        path = Path(path_str)
-        if path.is_file():
+        path = path_str
+        if os.path.isfile(path):
             files.append(str(path))
-        elif path.is_dir():
-            files.extend([str(f) for f in path.glob("*.fa*")])
-    return [f for f in files if Path(f).suffix.lower() in {'.fa', '.fasta', '.fna', '.faa'}]
+        elif os.path.isdir(path):
+            files.extend(glob.glob(os.path.join(path, "*.fa*")))
+    return [f for f in files if os.path.splitext(f)[1].lower() in {'.fa', '.fasta', '.fna', '.faa'}]
 
-def find_case_insensitive_file(directory: Path, filename: str) -> Optional[str]:
+def find_case_insensitive_file(directory, filename):
     """Find file with case-insensitive matching."""
-    for f in directory.iterdir():
-        if f.is_file() and f.name.lower() == filename.lower():
+    for f_name in os.listdir(directory):
+        f = os.path.join(directory, f_name)
+        if os.path.isfile(f) and f_name.lower() == filename.lower():
             return str(f)
     return None
 
@@ -963,7 +964,7 @@ def read_file_collection_csv(csv_path):
     """
     paths = {}
     try:
-        csv_dir = Path(csv_path).resolve().parent
+        csv_dir = os.path.dirname(os.path.abspath(csv_path))
 
         with open(csv_path, 'r', newline='') as f:
             reader = csv.reader(f)
@@ -987,25 +988,25 @@ def read_file_collection_csv(csv_path):
                             if not p_str.strip():
                                 continue
                             
-                            path = Path(p_str.strip())
-                            if not path.is_absolute():
-                                path = csv_dir / path
-                            subject_paths.append(str(path.resolve()))
+                            path = p_str.strip()
+                            if not os.path.isabs(path):
+                                path = os.path.join(csv_dir, path)
+                            subject_paths.append(os.path.abspath(path))
                         
                         paths[header] = subject_paths 
                     
                     else:
-                        path = Path(value.strip())
-                        if not path.is_absolute():
-                            path = csv_dir / path
-                        paths[header] = str(path.resolve())
+                        path = value.strip()
+                        if not os.path.isabs(path):
+                            path = os.path.join(csv_dir, path)
+                        paths[header] = os.path.abspath(path)
     
     except Exception as e:
         raise ValueError(f"Error reading file collection CSV {csv_path}: {str(e)}")
     
     return paths
 
-def load_name_mapping_table(mapping_table_file: str) -> Dict[str, str]:
+def load_name_mapping_table(mapping_table_file):
     """
     Loads subject name mapping table from a tab-delimited file.
     Returns dictionary mapping clean IDs to original IDs.
@@ -1187,7 +1188,7 @@ def run_blast_search(query_file, subject_file, output_file, blast_db_folder, cpu
 
     return output_file
     
-def run_hmmsearch(hmm_file: str, subject_file: str, output_file: str, hmmsearch: str = "hmmsearch", domtblout: bool = False) -> str:
+def run_hmmsearch(hmm_file, subject_file, output_file, hmmsearch = "hmmsearch", domtblout = False):
     """Run HMMER search and return results file path"""
     
     if domtblout:
@@ -1249,7 +1250,7 @@ def load_hmmsearch_results(result_file):
                     results[parts[0]] = None
     return results
 
-def hmm_build(fasta_file: str, hmm_output: str, alignment_tool: str = "mafft") -> str:
+def hmm_build(fasta_file, hmm_output, alignment_tool = "mafft"):
     """Build HMM from FASTA file with alignment preprocessing"""
     # Temporary files
     temp_dir = os.path.dirname(hmm_output)
@@ -1301,10 +1302,10 @@ Region that handles alignment creation and tree construction.
 Functions to process alignments and treefiles are provided as well.
 """
 
-def create_alignments(num_par: int, tree_output_folder: str, name: str, 
-                        number: int, aln_input_file: str, aln_file: str, 
-                        mode_aln: str, mafft: str, muscle: str, cpu_par: int, 
-                        cpu_max: int) -> None:
+def create_alignments(num_par, tree_output_folder, name, 
+                        number, aln_input_file, aln_file, 
+                        mode_aln, mafft, muscle, cpu_par, 
+                        cpu_max):
     """
     Creates alignments for all candidate chunks in parallel if chosen.
     """
@@ -1354,7 +1355,7 @@ def create_alignments(num_par: int, tree_output_folder: str, name: str,
     
     #print("All alignment processes completed")
 
-def alignment_trimming(aln_file: str, cln_aln_file: str, occupancy: float = 0.1) -> None:
+def alignment_trimming(aln_file, cln_aln_file, occupancy = 0.1):
     """
     Trims alignment by removing columns with low occupancy.
     """
@@ -1383,7 +1384,7 @@ def alignment_trimming(aln_file: str, cln_aln_file: str, occupancy: float = 0.1)
         with open(cln_aln_file, "w") as out:
             out.write("")
 
-def load_alignment(aln_file: str, tmp_mapping: Dict[str, str]) -> Dict[str, str]:
+def load_alignment(aln_file, tmp_mapping):
     """
     Loads alignment from FASTA file and dict for header mapping.   
     Returns dictionary with sequence headers as keys and sequences as values.
@@ -1413,13 +1414,13 @@ def load_alignment(aln_file: str, tmp_mapping: Dict[str, str]) -> Dict[str, str]
         sequences.update({header: "".join(seq)})
     return sequences
 
-def tree_constructor(num_process_candidates: int, tree_output_folder: str, 
-                            aln_candidate_file: str, aln_input_file: str, 
-                            aln_file: str, cln_aln_file: str, bait_file: str, 
-                            candidate_file: str, name: str, number: int, 
-                            mode_aln: str, mode_tree: str, mafft: str, muscle: str, 
-                            raxml: str, fasttree: str, iqtree: str, cpu_max: int, parallel_mode: str,
-                            cand_color: str = "green", bait_color: str = "red") -> List[str]:
+def tree_constructor(num_process_candidates, tree_output_folder, 
+                            aln_candidate_file, aln_input_file, 
+                            aln_file, cln_aln_file, bait_file, 
+                            candidate_file, name, number, 
+                            mode_aln, mode_tree, mafft, muscle, 
+                            raxml, fasttree, iqtree, cpu_max, parallel_mode,
+                            cand_color = "green", bait_color = "red"):
 
     """
     Handles parallel construction of alignments and phylogenetic trees.
@@ -1453,7 +1454,7 @@ def tree_constructor(num_process_candidates: int, tree_output_folder: str,
             candidates_number = len(candidates)
         
         # Create output directory
-        Path(tree_output_folder).mkdir(parents=True, exist_ok=True)
+        os.makedirs(tree_output_folder, exist_ok=True)
         
         #print(f"Processing {len(candidates)} candidates in {num_par} parallel chunks")
         
@@ -1654,7 +1655,7 @@ Region that provides functions for candidate assignment using phylogenetic trees
 Collection of functions to divide CYP candidates into ingroup and outgroup groups
 as well as assigning ingroup CYPs to orthologs.
 """
-def create_in_out_anno(baits_path: str, outgroup_path: str) -> Tuple[List[str], List[str]]:
+def create_in_out_anno(baits_path, outgroup_path):
     """Create in_list and out_list from bait and outgroup FASTA files.
     Returns tuple containing in_list and out_list.
     """
@@ -1961,7 +1962,7 @@ def candidates_baits_assignment(
 
     return subfamily_per_ref, family_per_ref
 
-def filter_baits_by_info(baits_info: Dict[str, Dict[str, str]], column: str, keyword: str) -> List[str]:
+def filter_baits_by_info(baits_info, column, keyword):
     """
     Filter bait IDs based on a given column and keyword in baits_info.
     Returns a list of bait sequence IDs.
@@ -1972,22 +1973,22 @@ def filter_baits_by_info(baits_info: Dict[str, Dict[str, str]], column: str, key
     ]
 
 def perform_candidate_tree_analysis(
-    prefix: str,
-    first_prefix: str,
-    second_prefix: str,
-    bait_fasta_path: str,
-    clean_members: Dict[str, str],
-    clean_members_file: str,
-    baits_info: Dict[str, Dict[str, str]],
-    subject_name_mapping_table: Dict[str, str],
-    bait_groups: Dict[str, str],
+    prefix,
+    first_prefix,
+    second_prefix,
+    bait_fasta_path,
+    clean_members,
+    clean_members_file,
+    baits_info,
+    subject_name_mapping_table,
+    bait_groups,
     args,
-    supplement_folder: str,
-    tree_folder: str,
-    group_around_ref_file: str,
-    ref_mapping_file: str,
-    filtered_fasta_file: str
-) -> None:
+    supplement_folder,
+    tree_folder,
+    group_around_ref_file,
+    ref_mapping_file,
+    filtered_fasta_file
+):
     """
     Performs phylogenetic analysis and candidate assignment based on 
     patristic distances to bait/reference sequences.
@@ -2003,7 +2004,7 @@ def perform_candidate_tree_analysis(
 
     # Prepare file paths for intermediate alignment and tree steps
     aln_prefix = f"{args.name}{first_prefix}_"
-    output_tree_folder = os.path.join(supplement_folder, f"{aln_prefix}first_tree/")
+    output_tree_folder = os.path.join(supplement_folder, f"{aln_prefix}first_tree")
     aln_candidate_file = f"{aln_prefix}alignment_candidates.fasta"
     aln_input_file = f"{aln_prefix}alignment_input.fasta"
     aln_file = f"{aln_input_file}.aln"
@@ -2188,7 +2189,7 @@ def perform_candidate_tree_analysis(
     write_fasta(filtered_seqs, filtered_fasta_file)
 
     # Prepare file paths for final tree
-    final_tree_output_folder = os.path.join(supplement_folder, f"{aln_prefix}final_0_FastTree_tree/")
+    final_tree_output_folder = os.path.join(supplement_folder, f"{aln_prefix}final_0_FastTree_tree")
     final_aln_candidate_file = f"{aln_prefix}final_alignment_candidates.fasta"
     final_aln_input_file = f"{aln_prefix}final_alignment_input.fasta"
     final_aln_file = f"{final_aln_input_file}.aln"
@@ -2210,11 +2211,11 @@ def perform_candidate_tree_analysis(
     return filtered_tree_path, final_tree_path
 
 def build_sequence_groups(
-    baits_fasta_path: str,
-    clean_members: Dict[str, str],
-    subfamily_mapping: Dict[str, List[Dict]],
-    family_mapping: Dict[str, List[Dict]],
-) -> Dict[str, set[str]]:
+    baits_fasta_path,
+    clean_members,
+    subfamily_mapping,
+    family_mapping
+):
     """
     Creates four groups:
       - group1_baits: all bait sequence IDs (FASTA headers)
@@ -2264,18 +2265,18 @@ def build_sequence_groups(
     } 
 
 def write_itol_annotation(
-    groups: Dict[str, set[str]],
-    output_folder: str,
-    dataset_label: str,
-    filename_suffix: str,
-    label_map: Optional[Dict[str, str]] = None,
-    palette: Optional[Dict[str, str]] = None,
-    strip_width: int = 50,
-    margin: int = 10,
+    groups,
+    output_folder,
+    dataset_label,
+    filename_suffix,
+    label_map,
+    palette,
+    strip_width=50,
+    margin=10,
 ) -> str:
     """
     Create an iTOL annotation.
-    - groups: Dict[group_key -> set[seqIDs]]
+    - groups
     - label_map: optional mapping from group_key -> iTOL label (e.g., {"group1_baits": "Baits"})
     - palette: optional mapping from group_key -> hex color
     - strip_width, margin: display parameters
@@ -2326,13 +2327,13 @@ def write_itol_annotation(
 Region to check sequences for domain hits using HMMER.
 """
 def domain_check(
-    sequences_file: str, 
-    domains_file: str, 
-    hmmresult: str, 
-    hmmoutput: str, 
-    hmmsearch: str = "hmmsearch", 
-    hmm_score: float = 100.0
-) -> Tuple[Dict, Dict, List]:
+    sequences_file, 
+    domains_file, 
+    hmmresult, 
+    hmmoutput, 
+    hmmsearch = "hmmsearch", 
+    hmm_score = 100.0
+):
     """Screen sequences for domain hits using HMMER
     Returns three tuples (results_dict, best_domain_matches, domain_names).
     """
@@ -2435,7 +2436,7 @@ def load_ortholog_family(ref_mapping_file):
 """
 Region providing functions for static as well as HMM-based motif checks.
 """
-def static_motif_check(fasta_file: str, motifs_path: str) -> Dict[str, Dict[str, str]]:
+def static_motif_check(fasta_file, motifs_path):
     """
     Checks protein sequences for the presence of specified motifs,
     considering motif order and positional boundaries.
@@ -2486,7 +2487,7 @@ def static_motif_check(fasta_file: str, motifs_path: str) -> Dict[str, Dict[str,
         # Backtracking to find valid motif combinations in correct order
         valid_paths = []
 
-        def backtrack(current_path: List[Tuple[str]], last_end_pos: int, remaining_motifs: List[Dict]):
+        def backtrack(current_path, last_end_pos, remaining_motifs):
             if not remaining_motifs:
                 valid_paths.append(current_path)
                 return
@@ -2515,7 +2516,7 @@ def static_motif_check(fasta_file: str, motifs_path: str) -> Dict[str, Dict[str,
 
     return (results, motif_names_list)
 
-def compile_motif_pattern(pattern: str) -> re.Pattern:
+def compile_motif_pattern(pattern):
     """Compile a motif pattern into a regular expression."""
     # Standardize pattern format
     pattern = pattern.replace('(', '[').replace(')', ']').replace('/', '')
@@ -2535,13 +2536,13 @@ def compile_motif_pattern(pattern: str) -> re.Pattern:
     return re.compile(''.join(regex_pattern))
 
 def motif_check(
-    sequences_file: str, 
-    motifs_file: str, 
-    hmmresult: str, 
-    hmmoutput: str, 
-    hmmsearch: str = "hmmsearch", 
-    cEvalue: float = 0.001
-) -> Tuple[Dict, List]:
+    sequences_file, 
+    motifs_file, 
+    hmmresult, 
+    hmmoutput, 
+    hmmsearch = "hmmsearch", 
+    cEvalue = 0.001
+):
     """Screen sequences for motifs using HMMER
         
     Returns a tuple of a dictionary mapping sequence IDs to dictionaries of motif hits
@@ -2579,16 +2580,16 @@ def motif_check(
     return results, motifs
 
 def create_motif_from_baits(
-    protein_motifs_path: str,
-    CYP_source: str,
-    output_dir: str,
-    mafft_available: bool,
-    muscle_available: bool,
-    flanklength: int = 5,
-    mafft_path: str = "mafft",
-    muscle_path: str = "muscle",
-    hmmbuild_path: str = "hmmbuild"
-) -> Tuple[str, Dict[str, int]]:
+    protein_motifs_path,
+    CYP_source,
+    output_dir,
+    mafft_available,
+    muscle_available,
+    flanklength = 5,
+    mafft_path = "mafft",
+    muscle_path = "muscle",
+    hmmbuild_path = "hmmbuild"
+):
     """
     Creates a combined HMM profile from motif definitions and bait sequences.
 
@@ -2606,7 +2607,7 @@ def create_motif_from_baits(
     and a dictionary mapping motif names to their core lengths.
     """
 
-    def _generate_combinations(motif: str) -> List[str]:
+    def _generate_combinations(motif):
         parts, i = [], 0
         while i < len(motif):
             if motif[i] == '(':
@@ -2621,7 +2622,7 @@ def create_motif_from_baits(
             combinations = [c + option for c in combinations for option in part]
         return combinations
 
-    def _score_window(window: str, motif: str) -> float:
+    def _score_window(window, motif):
         score = 0
         for a, b in zip(window, motif):
             if b == 'X':
@@ -2731,7 +2732,7 @@ def create_motif_from_baits(
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
 
-def parse_motif_names_lengths(hmm_file: str) -> tuple[list[str], dict[str, int]]:
+def parse_motif_names_lengths(hmm_file):
     """
     Reads HMM file and extracts names and lengths of motifs.
     Returns tuple of names and lengths.
@@ -3227,11 +3228,11 @@ def get_represenative_paralog_per_group(paralog_groups, clean_members, repr_clea
     return paralog_representatives
 
 def build_paralog_groups_for_itol(
-    baits_fasta_path: str,
-    final_members: Dict[str, str],
-    paralog_groups: List[List[str]],
-    representatives: Dict[str, str],
-) -> Dict[str, set[str]]:
+    baits_fasta_path,
+    final_members,
+    paralog_groups,
+    representatives
+):
     """
     Creates three groups for Step 8 (representative paralog groups):
       - group1_baits: all bait sequence IDs (from FASTA headers)
@@ -3389,7 +3390,7 @@ def collect_summary_data(
 """
 Region providing functions to create various output files, including HTML, SVG and PDF/PNG
 """
-def baits_info_to_txt(baits_info: Dict[str, Dict[str, str]], headers: List[str], output_path: str) -> None:
+def baits_info_to_txt(baits_info, headers, output_path):
     """
     Write the baits_info dictionary to a tab-separated .txt file using the original column order.
     """
@@ -3678,9 +3679,9 @@ def draw_tree_radial(tree, ax, radius=1.0):
     ax.axis('off')
     layout(tree)
 
-def plot_all_trees(result_folder: str, output_folder: str, bait_file: str, candidate_file: str,
-                   format: str = None, layout: str = "Polar", 
-                   cand_color: str = "green", bait_color: str = "red"):
+def plot_all_trees(result_folder, output_folder, bait_file, candidate_file,
+                   format = None, layout = "Polar", 
+                   cand_color = "green", bait_color = "red"):
     """
     Searches for Newick trees in the tree order and plots them as SVG and PDF/PNG files.
     """
@@ -3862,33 +3863,33 @@ def main():
     
     # Set output folder
     output_folder = args.output_folder if args.output_folder is not None else "Output"
-    processed_input_folder = args.processed_input_folder if args.processed_input_folder is not None else os.path.join(output_folder, "Processed_Input/")
+    processed_input_folder = args.processed_input_folder if args.processed_input_folder is not None else os.path.join(output_folder, "Processed_Input")
     
     print("Step 0 completed. " + "\n")
 
     # --- separated analyses for each subject --- #             
     for jidx, subject in enumerate(subjects_paths):
         
-        job_ID = Path(subject).stem
-        job_output_folder = Path(output_folder)
+        job_ID = os.path.splitext(os.path.basename(subject))[0]
+        job_output_folder = output_folder
         
         if len(subjects_paths) > 1:
-            job_output_folder = job_output_folder / f"{jidx:05d}_{job_ID}"
+            job_output_folder = os.path.join(job_output_folder, f"{jidx:05d}_{job_ID}")
         
-        job_output_folder.mkdir(parents=True, exist_ok=True)
+        os.makedirs(job_output_folder, exist_ok=True)
         
         print(f"Processing job {jidx+1}")
 
         # Create folders
-        result_folder = os.path.join(job_output_folder, "RESULTS/")
-        supplement_folder = os.path.join(job_output_folder, "SUPPLEMENTS/")
+        result_folder = os.path.join(job_output_folder, "RESULTS")
+        supplement_folder = os.path.join(job_output_folder, "SUPPLEMENTS")
         
         # Create subfolders
-        txt_folder = os.path.join(result_folder, "TXT/")
-        fasta_folder = os.path.join(result_folder, "FASTA/")
-        tree_folder = os.path.join(result_folder, "TREES/")
-        html_folder = os.path.join(result_folder, "HTML/")
-        heatmap_folder = os.path.join(result_folder, "HEATMAPS/")
+        txt_folder = os.path.join(result_folder, "TXT")
+        fasta_folder = os.path.join(result_folder, "FASTA")
+        tree_folder = os.path.join(result_folder, "TREES")
+        html_folder = os.path.join(result_folder, "HTML")
+        heatmap_folder = os.path.join(result_folder, "HEATMAPS")
 
         # Make folders
         os.makedirs(result_folder, exist_ok=True)
@@ -3910,11 +3911,8 @@ def main():
         baits_info_file = os.path.join(txt_folder, "00_baits_info.txt")
         baits_info_to_txt(baits_info, info_headers, baits_info_file)
 
-        # baits_info_file = txt_folder / "00_baits_info.txt"
-        # baits_info_to_txt(baits_info, info_headers, str(baits_info_file))
-
         # --- 00 Generate documentation file (simplified call) --- #
-        doc_file = txt_folder + args.name + "00_documentation.txt"
+        doc_file = os.path.join(txt_folder, args.name + "00_documentation.txt")
         generate_documentation_file(doc_file, baits_with_outgroup_path, baits_path, baits_info_file, hmm_domains_path, hmm_motifs_path, protein_motifs_path, 
                                     job_output_folder, subjects_paths, args.use_hmmer, args.mode_aln ,args.mode_tree, args.blastp, args.makeblastdb, args.hmmsearch, 
                                     args.cpu_max, args.mafft, args.muscle, args.raxml, args.fasttree,
@@ -3927,7 +3925,7 @@ def main():
         # --- 01 Search initial candidates --- #
         print("Step 1: Search initial candidates")
         seq_search_result_file = os.path.join(supplement_folder, "01_seq_search_results.txt")
-        blast_analyze_folder = os.path.join(supplement_folder, "01_blast_seq_search_analysis/")
+        blast_analyze_folder = os.path.join(supplement_folder, "01_blast_seq_search_analysis")
         os.makedirs(blast_analyze_folder, exist_ok=True)
 
         hmm_file = args.hmm if args.hmm else os.path.join(blast_analyze_folder, "bait.hmm")
@@ -3995,7 +3993,7 @@ def main():
 
         # Load sequences
         subject_sequences = read_fasta(subject)
-        subject_name_mapping_table = load_name_mapping_table(Path(processed_input_folder) / f"{job_ID}_mapping.txt")
+        subject_name_mapping_table = load_name_mapping_table(os.path.join(processed_input_folder, f"{job_ID}_mapping.txt"))
 
         # Save candidates as FASTA
         candidate_file = os.path.join(fasta_folder, f"{args.name}01_initial_candidates.fasta")
@@ -4011,7 +4009,7 @@ def main():
 
         # --- 02 construct phylogenetic tree and analyze tree file --- #
         print("Step 2: Assigning candidates to in and out groups")
-        inout_output_folder = os.path.join(supplement_folder, f"{args.name}02_in_out_CYP_analysis_trees/")
+        inout_output_folder = os.path.join(supplement_folder, f"{args.name}02_in_out_CYP_analysis_trees")
         os.makedirs(inout_output_folder, exist_ok=True)
 
 
@@ -4198,7 +4196,7 @@ def main():
         second_prefix=f"03_{args.ortholog_prefix}"
         filtered_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_baits_to_candidates_mapping.txt")
         filtered_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidates_to_bait_mapping.txt")
-        final_members_file = Path(fasta_folder) / f"{second_prefix}_candidate.fasta"
+        final_members_file = os.path.join(fasta_folder, f"{second_prefix}_candidate.fasta")
 
         ortholog_files_exist = all ([
             os.path.isfile(filtered_group_around_ref_file) and os.path.getsize(filtered_group_around_ref_file) > 0,
@@ -4242,7 +4240,7 @@ def main():
             second_prefix=f"03_{args.individual_ortholog_prefix}"
             ind_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_baits_to_candidates_mapping.txt")
             ind_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidates_to_bait_mapping.txt")
-            ind_filtered_fasta_file = Path(fasta_folder) / f"{second_prefix}_candidate.fasta"
+            ind_filtered_fasta_file = os.path.join(fasta_folder, f"{second_prefix}_candidate.fasta")
 
             individual_ortholog_files_exist = all ([
                 os.path.isfile(ind_group_around_ref_file) and os.path.getsize(ind_group_around_ref_file) > 0,
@@ -4256,7 +4254,7 @@ def main():
                 reduced_bait_fasta = os.path.join(fasta_folder, f"{args.name}03_filtered_baits.fasta")
                 bait_sequences = read_fasta(baits_path)
                 selected_seqs = {k: v for k, v in bait_sequences.items() if k in filtered_bait_ids}
-                write_fasta(selected_seqs, Path(reduced_bait_fasta))
+                write_fasta(selected_seqs, reduced_bait_fasta)
 
                 ind_filtered_tree_path, ind_final_tree_path = perform_candidate_tree_analysis(
                     prefix=prefix,
@@ -4410,7 +4408,7 @@ def main():
             second_prefix=f"05_Heme_motif_{args.ortholog_prefix}"
             motifs_group_around_ref_file = os.path.join(txt_folder, f"{second_prefix}_baits_to_candidates.txt")
             motifs_ref_mapping_file = os.path.join(txt_folder, f"{second_prefix}_candidates_to_bait_mapping.txt")
-            motifs_members_file = Path(fasta_folder) / f"{second_prefix}_candidate.fasta"
+            motifs_members_file = os.path.join(fasta_folder, f"{second_prefix}_candidate.fasta")
 
             motif_ortholog_files_exist = all ([
                 os.path.isfile(motifs_group_around_ref_file) and os.path.getsize(motifs_group_around_ref_file) > 0,
@@ -4448,7 +4446,7 @@ def main():
                     print(f"Error: '{static_summary_file}' not found.")
 
                 motif_fasta_file = os.path.join(supplement_folder, f"motifs_to_tree.fasta")
-                write_fasta(motif_members, Path(motif_fasta_file))
+                write_fasta(motif_members, motif_fasta_file)
 
                 motifs_filtered_tree_path, motifs_final_tree_path = perform_candidate_tree_analysis(
                     prefix=prefix,
@@ -4484,7 +4482,7 @@ def main():
             print("Step 6: No expression data provided. Skipping procession of expression data.")
             highest_expression_file = None
         else:
-            print("Step 7: Process expression data.")
+            print("Step 6: Process expression data.")
             filtered_expression_file = os.path.join(txt_folder, f"{args.name}06_filtered_expression_matrix.txt")
 
             if not (os.path.isfile(filtered_expression_file) and os.path.getsize(filtered_expression_file) > 0):
@@ -4584,7 +4582,7 @@ def main():
                                 out.write(gene + "\t" + ";".join(group) + "\n")
 
             if not (os.path.isdir(tree_folder) and any(f.startswith("07") for f in os.listdir(tree_folder))):
-                repr_tree_output_folder = os.path.join(supplement_folder, f"{args.name}07_repr_tree/")
+                repr_tree_output_folder = os.path.join(supplement_folder, f"{args.name}07_repr_tree")
                 repr_fin_aln_candidate_file = "07_repr_fin_alignment_candidates.fasta"
                 repr_fin_aln_input_file = "07_repr_fin_alignment_input.fasta"
                 repr_fin_aln_file = "07_repr_fin_alignment_input.fasta.aln"
@@ -4657,7 +4655,6 @@ def main():
             with open(summary_file, "w") as out:
                 out.write("\t".join(header) + "\n")
                 out.write("\t".join(subheader) + "\n")
-                # Sicherstellen, dass alle Einträge als Strings geschrieben werden
                 for seq_id in sorted(summary_data.keys()):
                     out.write("\t".join(map(str, summary_data[seq_id])) + "\n")
 
